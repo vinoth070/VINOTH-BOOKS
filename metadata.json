@@ -1,0 +1,8 @@
+{
+  "name": "VINOTH BOOKS — Independent Digital Publishing & eBook Marketplace",
+  "description": "Official independent digital publishing platform and direct-to-customer eBook bookstore founded by Vinoth.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

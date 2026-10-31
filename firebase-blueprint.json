@@ -1,0 +1,183 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User account profile and library",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "customer"] },
+        "emailVerified": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "Book": {
+      "title": "Book",
+      "description": "Digital eBook manuscript and metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "author": { "type": "string" },
+        "shortDescription": { "type": "string" },
+        "fullDescription": { "type": "string" },
+        "category": { "type": "string" },
+        "coverImage": { "type": "string" },
+        "originalPrice": { "type": "number" },
+        "sellingPrice": { "type": "number" },
+        "status": { "type": "string", "enum": ["published", "draft", "archived"] },
+        "isFree": { "type": "boolean" },
+        "featured": { "type": "boolean" },
+        "bestSeller": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "title", "author", "category", "sellingPrice", "status"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "eBook classification category",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "name", "slug"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "eBook purchase transaction record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "total": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["paid", "pending", "failed", "cancelled"] },
+        "paymentMode": { "type": "string", "enum": ["test", "live"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "customerEmail", "total", "paymentStatus", "paymentMode"]
+    },
+    "Coupon": {
+      "title": "Coupon",
+      "description": "Promotional discount coupon code",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "discountType": { "type": "string", "enum": ["percentage", "fixed"] },
+        "discountValue": { "type": "number" },
+        "minPurchase": { "type": "number" },
+        "expiresAt": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "usageCount": { "type": "number" }
+      },
+      "required": ["id", "code", "discountType", "discountValue", "isActive"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Reader book review and rating",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "bookId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "rating": { "type": "number" },
+        "title": { "type": "string" },
+        "comment": { "type": "string" },
+        "verifiedPurchase": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["approved", "pending", "hidden"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "bookId", "userId", "rating", "title", "comment"]
+    },
+    "Feedback": {
+      "title": "Feedback",
+      "description": "Customer inquiry or support message",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "replied", "resolved", "archived"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "customerName", "customerEmail", "subject", "message", "status"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Administrative audit and security activity log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "adminEmail": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "action", "adminEmail", "timestamp"]
+    },
+    "WebsiteSettings": {
+      "title": "WebsiteSettings",
+      "description": "Store configuration and operational settings",
+      "type": "object",
+      "properties": {
+        "storeName": { "type": "string" },
+        "supportEmail": { "type": "string" },
+        "currency": { "type": "string" },
+        "maintenanceMode": { "type": "boolean" }
+      },
+      "required": ["storeName", "supportEmail"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles and permissions"
+    },
+    "/books/{bookId}": {
+      "schema": { "$ref": "#/entities/Book" },
+      "description": "Published and draft eBooks catalog"
+    },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "Book categories"
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Customer orders and payment records"
+    },
+    "/coupons/{couponId}": {
+      "schema": { "$ref": "#/entities/Coupon" },
+      "description": "Discount coupon codes"
+    },
+    "/reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/Review" },
+      "description": "Book reviews and reader ratings"
+    },
+    "/feedback/{feedbackId}": {
+      "schema": { "$ref": "#/entities/Feedback" },
+      "description": "Customer support messages"
+    },
+    "/activityLogs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "Audit and security logs"
+    },
+    "/websiteSettings/current": {
+      "schema": { "$ref": "#/entities/WebsiteSettings" },
+      "description": "Site global settings"
+    }
+  }
+}

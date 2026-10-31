@@ -1,0 +1,955 @@
+# VINOTH BOOKS — FINAL MASTER DEVELOPMENT PROMPT
+
+Act as a senior full-stack developer, Firebase architect, payment integration specialist, UI/UX designer, and application security engineer.
+
+Your task is to transform my existing **VINOTH BOOKS** website into a fully functional, secure, production-ready digital eBook publishing and purchasing platform.
+
+This is the FINAL major development phase.
+
+Do not create a new project from scratch. First inspect the entire existing codebase, understand its architecture, identify existing bugs, and upgrade the current application while preserving all working features.
+
+Do not simply create visual mockups. Every button, form, navigation item, authentication flow, database operation, and payment workflow must work correctly.
+
+## 1. PROJECT IDENTITY
+
+Website Name: VINOTH BOOKS
+
+Owner: Vinoth
+
+Brand identity:
+
+* Premium digital bookstore.
+* Professional international publishing platform.
+* Elegant, minimal, modern interface.
+* Responsive desktop, tablet, and mobile layouts.
+
+### Homepage Branding Changes
+
+Currently, the homepage displays:
+
+VINOTH BOOKS
+Ideas Into Pages. Knowledge Without Limits.
+
+Change this completely.
+
+Requirements:
+
+* At the top navigation/header, display ONLY the text logo "VINOTH BOOKS".
+* Remove the tagline from the top header.
+* Remove the existing tagline from the homepage hero section as well.
+* Do not display the tagline as a large heading anywhere on the homepage.
+* Maintain a clean, premium homepage design.
+* Correct all homepage spacing, alignment, typography, and responsive layout.
+* Ensure the hero section looks professional without overlapping borders or text.
+
+Do not add unnecessary branding elements.
+
+---
+
+# 2. FIREBASE BACKEND INTEGRATION
+
+Connect the existing application to a real Firebase backend.
+
+Use Firebase services appropriately:
+
+1. Firebase Authentication
+2. Cloud Firestore
+3. Firebase Storage
+4. Firebase Security Rules
+5. Firebase App Check where supported
+6. Cloud Functions or a secure backend for privileged operations.
+
+### Firestore Database Structure
+
+Design a properly organized database for:
+
+* Users
+* User profiles
+* Books
+* Categories
+* Orders
+* Payments
+* Coupons
+* Reviews
+* Ratings
+* Downloads
+* Customer support messages
+* Admin activity logs
+* Website settings
+
+Use proper document relationships, validation, timestamps, and access permissions.
+
+### Important Requirements
+
+* Do not use localStorage as the permanent database.
+* Do not use hardcoded sample data as real customer data.
+* Data must persist after refreshing or reopening the website.
+* Changes made by an administrator must update the customer-facing website.
+* Implement proper loading, success, and error states.
+* Handle network failures gracefully.
+
+If Firebase credentials or configuration are missing, clearly identify what must be configured. Never pretend the backend is connected when it is not.
+
+---
+
+# 3. COMPLETE USER AUTHENTICATION SYSTEM
+
+Create a professional, secure Sign In and Sign Up experience.
+
+There must be no separate public Admin Login button.
+
+Use the same authentication page for customers and the authorized administrator.
+
+### A. Sign Up
+
+Allow new customers to register using:
+
+* Full name
+* Email address
+* Password
+* Confirm password
+* Sign Up with Google
+
+Requirements:
+
+* Validate all input fields.
+* Verify email ownership through Firebase email verification.
+* Do not grant normal account access until required verification is complete.
+* Prevent duplicate account registration.
+* Display clear validation messages.
+* Provide a resend verification email option.
+* Implement password reset functionality.
+
+### B. Sign In
+
+Provide:
+
+* Email and Password Sign In
+* Sign In with Google
+* Forgot Password
+* Remember session securely
+* Proper logout functionality
+
+Authentication must work reliably.
+
+Fix existing authentication errors instead of hiding them.
+
+### C. Google Authentication
+
+Implement Firebase Google Authentication.
+
+Users must be able to:
+
+* Sign Up with Google.
+* Sign In with Google.
+* Access their account using their verified Google identity.
+
+Configure authorized domains and OAuth settings correctly.
+
+Do not create fake Google authentication buttons.
+
+### D. Email Validation and Fake Email Prevention
+
+Implement appropriate email validation.
+
+Requirements:
+
+* Validate email syntax.
+* Require email ownership verification.
+* Reject malformed email addresses.
+* Prevent unverified email accounts from accessing protected features.
+* Where feasible, detect disposable or temporary email providers using a server-side validation service or maintained blocklist.
+* Apply reasonable registration and login rate limits.
+
+Important: Do not claim that syntax validation alone can detect fake email addresses. Email ownership verification is mandatory.
+
+### E. Password Strength Checklist
+
+During account creation, display a live password strength checklist.
+
+The password must satisfy:
+
+1. At least 8 characters.
+2. At least one uppercase letter (A–Z).
+3. At least one lowercase letter (a–z).
+4. At least one number (0–9).
+5. At least one special character (!@#$%^&* etc.).
+
+Display a green checkmark when each condition is satisfied.
+
+Also include:
+
+* Password visibility toggle (eye icon).
+* Confirm password visibility toggle.
+* Password mismatch validation.
+* Clear password strength indicator.
+* Accessible error messages.
+
+Never store plain-text passwords.
+
+Use Firebase Authentication's secure password handling.
+
+---
+
+# 4. ADMIN ACCESS CONTROL — VERY IMPORTANT
+
+There must be only ONE authorized administrator account.
+
+Do not create a separate Admin Login option.
+
+The administrator must sign in through the normal Sign In page.
+
+### Admin Identification
+
+Implement secure administrator authorization using:
+
+* A server-side configured administrator email allowlist.
+* Firebase Authentication.
+* Firebase custom claims or equivalent server-verified role assignment.
+* Firestore Security Rules and backend authorization.
+
+The administrator email must be configurable through secure backend configuration.
+
+Do not hardcode administrator credentials into public frontend code.
+
+### Expected Login Behaviour
+
+When the authorized administrator signs in:
+
+* Redirect to the Admin Dashboard.
+* Display administrator-specific navigation.
+* Allow access to publishing and management features.
+
+When a normal customer signs in:
+
+* Redirect to the customer bookstore dashboard/homepage.
+* Display customer-specific navigation.
+* Never expose administrator controls.
+
+### Security Requirements
+
+* A customer must never become an administrator by changing frontend data.
+* Do not rely only on checking an email address in React.
+* Verify administrator privileges on the backend.
+* Protect every admin API and database operation.
+* Prevent direct URL access to protected admin pages.
+* Revalidate authorization when sessions change.
+* Clear the correct authentication state during logout.
+
+If an unauthorized user attempts to access an admin route, redirect them safely.
+
+---
+
+# 5. CUSTOMER BOOKSTORE EXPERIENCE
+
+Make the customer experience extremely user-friendly.
+
+Customers should be able to:
+
+* Explore all published books.
+* Browse categories.
+* View best-selling books.
+* View new releases.
+* Explore free books.
+* Search books.
+* Filter and sort books.
+* View book descriptions.
+* View author/publisher information where configured.
+* See book covers and previews.
+* Add books to wishlist.
+* Add paid books to cart.
+* Purchase books.
+* Access purchased books.
+* Download eligible PDFs.
+* View previous orders.
+* View payment status.
+* Submit ratings and reviews.
+* Contact customer support.
+
+All customer-facing sections must retrieve real data from Firebase.
+
+Do not display unpublished or archived books publicly.
+
+---
+
+# 6. COMPLETE BOOK PURCHASE AND CHECKOUT SYSTEM
+
+Build a professional eBook purchase experience inspired by modern digital bookstores and PDF purchasing platforms.
+
+### Book Details Page
+
+Display:
+
+* Book cover
+* Book title
+* Description
+* Category
+* Price
+* Discounted price, if applicable
+* Available format
+* Preview, if enabled
+* Ratings and reviews
+* Buy Now button
+* Add to Cart button
+
+### Purchase Flow
+
+Implement this complete workflow:
+
+1. Customer selects a book.
+2. Customer clicks Buy Now or Add to Cart.
+3. System validates book availability and current price.
+4. Customer proceeds to checkout.
+5. Customer reviews the order summary.
+6. Customer enters an applicable coupon code.
+7. System validates the coupon on the backend.
+8. System calculates the final payable amount.
+9. Customer selects an available payment method.
+10. Razorpay Checkout opens.
+11. Customer completes payment.
+12. Backend verifies the payment.
+13. Order status updates only after successful verification.
+14. Purchased book becomes available in My Library.
+15. Customer can download the PDF.
+
+### Checkout Page Design
+
+Include:
+
+* Order summary
+* Book title and cover
+* Original price
+* Discount
+* Coupon code
+* Coupon validation status
+* Tax information, if applicable
+* Final payable amount
+* Available payment methods
+* Secure payment indicator
+* Pay Now button
+
+Display a clear price breakdown before the customer confirms payment.
+
+Do not introduce hidden charges.
+
+### Coupon System
+
+Include:
+
+"Have a coupon code?"
+
+Provide an input field and Apply button.
+
+Support:
+
+* Valid coupons
+* Invalid coupons
+* Expired coupons
+* Minimum order values
+* Percentage discounts
+* Fixed discounts
+* Usage limits
+* Per-customer restrictions
+* Maximum discount limits
+
+Validate coupons on the backend.
+
+Never trust discount calculations supplied by the frontend.
+
+---
+
+# 7. RAZORPAY PAYMENT INTEGRATION
+
+Implement a proper Razorpay payment integration.
+
+The website must support Razorpay's available and enabled payment methods.
+
+Depending on the merchant account's eligibility and Razorpay configuration, support available methods such as:
+
+* UPI
+* Credit Cards
+* Debit Cards
+* Net Banking
+* Supported Wallets
+* Other payment methods enabled for the merchant account
+
+Do not hardcode payment methods that the merchant account cannot process.
+
+Let Razorpay Checkout display the payment options actually enabled for the account.
+
+### Payment Architecture
+
+Use a secure server-side integration.
+
+Required workflow:
+
+1. Customer selects a book.
+2. Frontend sends the purchase request to the backend.
+3. Backend verifies the book and calculates the amount.
+4. Backend creates a Razorpay Order.
+5. Frontend opens Razorpay Checkout using the returned order details.
+6. Customer completes payment.
+7. Backend verifies the Razorpay payment signature.
+8. Backend confirms the payment status.
+9. Backend updates the order.
+10. Backend grants access to the purchased eBook.
+
+Implement:
+
+* Razorpay Order API.
+* Payment signature verification.
+* Webhook verification.
+* Duplicate payment prevention.
+* Idempotent order processing.
+* Payment status tracking.
+* Failed payment handling.
+* Cancelled payment handling.
+* Refund status handling where applicable.
+* Transaction records.
+
+Never grant paid book access based only on a frontend success message.
+
+### Payment Information
+
+Use Razorpay Checkout to collect payment information.
+
+Do not directly collect or store customers' card numbers, CVV, UPI PINs, banking passwords, or other sensitive payment credentials.
+
+Never store such information in Firebase.
+
+---
+
+# 8. TEST MODE AND LIVE MODE SWITCHING
+
+The Admin Dashboard must contain a professional Payment Settings section.
+
+Display:
+
+* Current payment environment.
+* Test Mode status.
+* Live Mode status.
+* Razorpay integration status.
+* Configuration status.
+* Payment verification status.
+
+### Test Mode
+
+Initially, the website must operate in Test Mode.
+
+Use Razorpay Test Mode credentials configured securely on the backend.
+
+Clearly display:
+
+"TEST MODE — No real money is being charged."
+
+Do not pretend that test transactions are real payments.
+
+### Live Mode
+
+Provide a controlled "Switch to Live Account" setting.
+
+However, implement the following secure architecture:
+
+* Razorpay Key ID and Key Secret must be stored in backend environment variables or an approved secure secrets manager.
+* Never expose the Key Secret to the browser.
+* Never save the Key Secret in localStorage, sessionStorage, Firestore, frontend settings, or public source code.
+* Do not place secrets inside React components.
+* Do not commit secrets to GitHub.
+* Do not allow an ordinary administrator to retrieve or display existing secrets.
+
+The Payment Settings interface may allow an authorized administrator to initiate a configuration update through a protected backend operation.
+
+Only switch to Live Mode when:
+
+1. Valid Live Mode credentials are configured securely on the server.
+2. Backend validation succeeds.
+3. Razorpay account configuration is ready.
+4. The administrator explicitly confirms the change.
+5. A production readiness check passes.
+
+When Live Mode is activated:
+
+* Backend must create real Razorpay orders.
+* Real payments must be verified server-side.
+* Successful transactions must be recorded.
+* Verified settlements must go to the configured Razorpay merchant account.
+* Customers must receive access only after payment verification.
+
+Do not assume that changing a frontend toggle alone activates real payments.
+
+If the backend or live credentials are unavailable, keep the website in Test Mode and clearly explain what is missing.
+
+Never simulate a successful Live Mode transaction.
+
+---
+
+# 9. SECURE PDF STORAGE AND DOWNLOAD SYSTEM
+
+Implement a proper eBook storage and delivery system.
+
+### Admin Upload
+
+Allow the administrator to:
+
+* Upload PDF files.
+* Upload book cover images.
+* Enter book details.
+* Set book prices.
+* Assign categories.
+* Publish or unpublish books.
+
+Use Firebase Storage with secure access controls.
+
+Validate:
+
+* File type
+* File size
+* File extension
+* MIME type
+* Upload status
+* Storage path
+
+Do not allow arbitrary executable uploads.
+
+### Customer Download
+
+For free books:
+
+* Allow eligible customers to access the free book.
+* Do not open a paid checkout.
+
+For paid books:
+
+* Require verified successful payment.
+* Confirm ownership on the backend.
+* Provide a secure download option.
+* Prevent unauthorized direct access to PDF storage URLs.
+
+Use authenticated download authorization and short-lived download links or an equivalent secure delivery mechanism.
+
+Do not expose permanent public download URLs for paid books.
+
+### My Library
+
+Display:
+
+* Purchased books
+* Eligible free books
+* Book covers
+* Purchase date
+* Order information
+* Download button
+
+A paid book must never appear as purchased before payment verification.
+
+---
+
+# 10. PROFESSIONAL ADMIN DASHBOARD
+
+Create a completely separate administrator interface.
+
+The admin dashboard must not look like the customer bookstore.
+
+### Admin Sidebar
+
+Include:
+
+1. Dashboard Overview
+2. Books Management
+3. Add New Book
+4. Categories
+5. Orders
+6. Customers
+7. Sales Analytics
+8. Ratings & Reviews
+9. Customer Feedback
+10. Coupons & Discounts
+11. Payment Settings
+12. Website Settings
+13. Security & Activity Logs
+14. Logout
+
+### Dashboard Overview
+
+Display real database information:
+
+* Total revenue
+* Total orders
+* Books sold
+* Total customers
+* Published books
+* Total reviews
+* Average rating
+
+Include useful charts:
+
+* Daily revenue
+* Weekly revenue
+* Monthly revenue
+* Best-selling books
+* Sales by category
+* Customer growth
+
+Do not generate fake revenue or fake transaction records.
+
+### Books Management
+
+Allow the administrator to:
+
+* Add books.
+* Edit book information.
+* Change prices.
+* Change categories.
+* Upload or replace PDFs.
+* Upload cover images.
+* Publish/unpublish books.
+* Archive books.
+* Delete eligible books.
+
+For books with purchase history, prefer archiving instead of permanently deleting historical order records.
+
+### Orders Management
+
+Display:
+
+* Order ID
+* Customer
+* Book
+* Amount
+* Payment method
+* Payment status
+* Order date
+* Download eligibility
+
+Allow authorized administrators to inspect order details.
+
+Do not allow manual modification of payment status to bypass payment verification.
+
+### Customer Management
+
+Display appropriate customer information.
+
+Allow administrators to manage account status and review customer activity according to permissions and privacy requirements.
+
+Do not expose passwords or sensitive authentication credentials.
+
+---
+
+# 11. USER-FRIENDLY INTERFACE IMPROVEMENTS
+
+Make the website feel like a real commercial digital bookstore.
+
+Improve:
+
+* Navigation
+* Book discovery
+* Search
+* Filters
+* Book details
+* Cart
+* Checkout
+* Order confirmation
+* My Library
+* Download experience
+* Authentication
+* Customer profile
+* Support
+
+Add:
+
+* Clear loading indicators.
+* Success notifications.
+* Useful error messages.
+* Empty-state illustrations or messages.
+* Confirmation dialogs.
+* Mobile-friendly navigation.
+* Accessible form labels.
+* Keyboard accessibility.
+
+Every button must have a meaningful working action.
+
+Do not leave placeholder buttons.
+
+---
+
+# 12. ESSENTIAL SECURITY CHECKS
+
+Implement and test the following security requirements.
+
+1. Hide API keys: Store keys in environment variables and never hardcode them in frontend or public code.
+2. Check environment variables: Ensure .env files are properly configured and loaded securely on the server.
+3. Check keys in Git: Verify that secret keys or sensitive tokens haven't been committed to version control history.
+4. Protect admin routes: Restrict backend and dashboard routes so unauthenticated users cannot access them.
+5. Add authentication: Implement robust user authentication and secure session management.
+6. Check user permissions: Validate role-based access control so users only see or edit what they are authorized to.
+7. Sanitize user inputs: Clean and validate all incoming data.
+8. Protect against XSS: Escape user-generated content in the browser.
+9. SQL injection protection: If SQL is used, use parameterized queries or an ORM. For Firestore, validate queries and permissions appropriately.
+10. Check database rules: Lock down Firebase Security Rules and storage permissions.
+11. Add rate limiting: Prevent brute-force login attempts and API abuse.
+12. Set spending limits: Configure billing alerts, budgets, quotas, and usage limits for third-party services.
+13. Secure file uploads: Validate file types, sizes, and storage paths.
+14. CSRF protection: Protect state-changing requests wherever the authentication architecture requires it.
+15. Check CORS settings: Restrict cross-origin requests to trusted domains.
+16. Enable HTTPS: Require encrypted connections across the production website.
+17. Add security headers: Configure CSP, HSTS, X-Content-Type-Options, and appropriate frame protections.
+18. Secure cookies: Use HttpOnly, Secure, and SameSite attributes for sensitive server-managed cookies.
+19. Disable debug mode: Turn off verbose stack traces and development error pages in production.
+20. Check production settings: Review environment flags, database connections, logging, and deployment configuration before launch.
+
+Also implement:
+
+* Firebase App Check where appropriate.
+* Secure password reset.
+* Secure session expiration.
+* Authentication error handling.
+* Admin activity logging.
+* Secure payment webhook verification.
+* Protection against duplicate orders.
+* Server-side ownership checks before downloads.
+* Appropriate privacy and data retention controls.
+
+Never expose sensitive information in browser console logs or error messages.
+
+---
+
+# 13. WEBSITE SETTINGS
+
+Provide configurable settings for:
+
+* Website name
+* Logo
+* Contact information
+* Support email
+* Currency
+* Tax settings, where applicable
+* Payment environment
+* Homepage featured books
+* Categories
+* Website maintenance status
+
+Do not invent legal, tax, business, or company details.
+
+Keep all settings editable only by authorized administrators.
+
+---
+
+# 14. CUSTOMER SUPPORT
+
+Create a working customer support system.
+
+Customers must be able to submit:
+
+* Name
+* Email
+* Subject
+* Message
+
+Save messages in Firebase.
+
+Admin should be able to:
+
+* View messages.
+* Read messages.
+* Reply.
+* Mark as resolved.
+* Archive conversations.
+
+Do not claim an email was sent unless a real email delivery service is integrated.
+
+---
+
+# 15. DESIGN SYSTEM
+
+Maintain the existing premium VINOTH BOOKS visual identity.
+
+### Dark Mode
+
+* Midnight navy backgrounds.
+* Charcoal surfaces.
+* Soft ivory text.
+* Champagne gold accents.
+
+### Light Mode
+
+* Warm ivory and white surfaces.
+* Deep navy typography.
+* Gold accents.
+
+Both themes must work consistently across:
+
+* Homepage
+* Authentication
+* Book pages
+* Cart
+* Checkout
+* My Library
+* Customer profile
+* Admin dashboard
+* Payment settings
+* Modals
+* Forms
+* Tables
+* Charts
+
+Use centralized theme tokens.
+
+Persist the user's theme preference.
+
+Do not leave hardcoded colors that break theme switching.
+
+Use elegant serif headings and modern sans-serif body typography.
+
+---
+
+# 16. TESTING — DO NOT SKIP
+
+Before declaring the project complete, test the following workflows.
+
+### Customer Tests
+
+1. Open homepage.
+2. Register with email.
+3. Verify email.
+4. Sign in.
+5. Sign in using Google.
+6. Test password visibility.
+7. Test password checklist.
+8. Test forgot password.
+9. Explore books.
+10. Search and filter books.
+11. Open book details.
+12. Add book to cart.
+13. Apply a valid coupon.
+14. Apply an invalid coupon.
+15. Complete a Razorpay Test Mode payment.
+16. Verify payment on the backend.
+17. Check My Library.
+18. Download purchased PDF.
+19. Try accessing an unpaid paid book.
+20. Verify that unauthorized downloads are blocked.
+21. Access a free book.
+22. Submit a review.
+23. Submit a support message.
+24. View order history.
+25. Logout.
+
+### Administrator Tests
+
+1. Sign in using the authorized administrator account.
+2. Verify Admin Dashboard access.
+3. Sign in using a normal customer account and confirm admin access is denied.
+4. Add a book.
+5. Upload a PDF.
+6. Upload a cover image.
+7. Publish a book.
+8. Edit a book.
+9. Archive a book.
+10. Manage categories.
+11. View orders.
+12. View customers.
+13. Check sales analytics.
+14. Manage coupons.
+15. View support messages.
+16. Review customer feedback.
+17. Configure Test Mode.
+18. Verify payment settings access.
+19. Logout.
+20. Attempt direct access to admin routes after logout.
+
+### Security Tests
+
+Test:
+
+* Unverified email access.
+* Invalid login attempts.
+* Weak passwords.
+* Unauthorized admin access.
+* Unauthorized Firestore access.
+* Unauthorized Storage access.
+* Invalid payment signatures.
+* Duplicate payment callbacks.
+* Manipulated prices.
+* Manipulated coupon discounts.
+* Unpaid downloads.
+* Invalid file uploads.
+* Missing environment variables.
+* Production configuration.
+
+Do not declare a test passed unless it was actually performed.
+
+---
+
+# 17. DEVELOPMENT RULES
+
+Follow these rules throughout development:
+
+1. Inspect the existing source code before changing anything.
+2. Preserve working features.
+3. Fix root causes, not just visual symptoms.
+4. Do not unnecessarily replace the existing technology stack.
+5. Use Firebase as the actual backend.
+6. Do not use mock authentication in production.
+7. Do not use fake payment success.
+8. Do not grant paid book access without server-side payment verification.
+9. Never expose Razorpay secrets.
+10. Do not create fake customers, fake reviews, or fake revenue.
+11. Do not leave unfinished buttons.
+12. Do not remove existing working features without a valid reason.
+13. Maintain responsive design.
+14. Keep code modular and maintainable.
+15. Use proper error handling.
+16. Never claim that an external service is connected until its configuration and operation have been verified.
+
+If a feature requires additional Firebase configuration, OAuth configuration, backend deployment, Razorpay activation, or environment variables, implement the code and clearly identify the remaining configuration steps.
+
+---
+
+# 18. FINAL ACCEPTANCE CRITERIA
+
+The project is complete only when:
+
+* Homepage branding is corrected.
+* Firebase backend is properly connected.
+* Customer registration and login work.
+* Google Sign In and Sign Up work.
+* Email verification works.
+* Password strength validation works.
+* Only the authorized administrator can access Admin Dashboard.
+* Customers see only customer features.
+* Books are stored and managed through Firebase.
+* Cart and checkout work.
+* Coupons are validated correctly.
+* Razorpay Test Mode works with real test credentials.
+* Live Mode can be enabled securely after server-side configuration.
+* Payments are verified on the backend.
+* Paid PDF downloads are protected.
+* Free PDF downloads work correctly.
+* My Library displays the correct books.
+* Admin dashboard works independently.
+* Security rules and backend permissions are tested.
+* All important buttons and navigation links work.
+* Mobile and desktop layouts work correctly.
+
+### FINAL REPORT
+
+After implementation, provide a clear report containing:
+
+1. Existing bugs identified.
+2. Bugs fixed.
+3. New features implemented.
+4. Firebase services connected.
+5. Authentication implementation.
+6. Admin authorization implementation.
+7. Razorpay integration status.
+8. Security measures implemented.
+9. Tests actually performed and their results.
+10. Remaining configuration steps.
+11. Backend deployment requirements.
+12. Production launch readiness.
+
+Separate completed features from features that still require external configuration.
+
+**FINAL OBJECTIVE:**
+
+Build VINOTH BOOKS into a secure, reliable, professional digital publishing and eBook purchasing platform where real customers can register, explore books, purchase eBooks through Razorpay, and securely download their purchased PDFs — while the authorized administrator can manage the entire publishing business through a separate Admin Dashboard.

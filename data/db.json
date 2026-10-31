@@ -1,0 +1,608 @@
+{
+  "books": [
+    {
+      "id": "book-ai-mind",
+      "title": "The AI Mind: Architecture of Tomorrow",
+      "subtitle": "Designing Human-Centered Intelligent Systems and Autonomous Workflows",
+      "author": "VINOTH BOOKS Publishing",
+      "shortDescription": "The definitive blueprint for understanding, orchestrating, and building real-world AI applications with clarity and precision.",
+      "fullDescription": "In \"The AI Mind: Architecture of Tomorrow\", this volume dismantles the noise and hype surrounding artificial intelligence to deliver an actionable, first-principles handbook. Written for engineers, founders, and knowledge workers, this book details how autonomous agents, reasoning loops, and multi-modal models can be harnessed to solve tangible problems without compromising human agency.",
+      "category": "Artificial Intelligence",
+      "coverImage": "/src/assets/images/book_cover_ai_revolution_1793365303535.jpg",
+      "originalPrice": 1299,
+      "sellingPrice": 799,
+      "language": "English",
+      "pages": 312,
+      "isbn": "978-93-5467-101-2",
+      "publicationDate": "2026-04-15",
+      "tags": [
+        "AI",
+        "Architecture",
+        "Agents",
+        "Technology",
+        "Deep Learning"
+      ],
+      "featured": true,
+      "bestSeller": true,
+      "isFree": false,
+      "status": "published",
+      "keyLearnings": [
+        "Understand foundational LLM cognitive architectures without academic fluff.",
+        "Build agentic feedback loops that execute real workflows autonomously.",
+        "Design resilient human-in-the-loop validation patterns.",
+        "Architect scalable vector pipelines and domain-specific knowledge embeddings."
+      ],
+      "tableOfContents": [
+        "Chapter 1: The Transition from Static Code to Cognitive Engines",
+        "Chapter 2: Context Windows & Memory Foundations",
+        "Chapter 3: Autonomous Agents: The Plan-Execute-Reflect Cycle",
+        "Chapter 4: Grounding Models in Real-World Tooling",
+        "Chapter 5: Production Invariants & Security Guardrails",
+        "Chapter 6: The Sovereign Knowledge Worker in the AI Era"
+      ],
+      "sampleContent": [
+        {
+          "chapterTitle": "Chapter 1: The Transition from Static Code to Cognitive Engines",
+          "content": "For decades, our relationship with computational machinery was deterministic. We wrote unambiguous syntax: conditional statements, iterative loops, and rigid database schemas. If a circumstance was anticipated, the software responded; if not, it threw an unhandled exception.\n\nArtificial intelligence does not merely accelerate this deterministic paradigm—it replaces brittle rule systems with probabilistic inference. A modern neural architecture does not follow a prescribed recipe; it projects meaning into high-dimensional latent space and navigates towards coherent resolution.\n\nWhen you begin thinking in latent vectors and agentic deliberation rather than procedural step-by-step logic, you stop treating software as a spreadsheet with buttons. You begin treating it as an intellectual collaborator capable of synthesis, adaptation, and unexpected brilliance."
+        },
+        {
+          "chapterTitle": "Chapter 2: Context Windows & Memory Foundations",
+          "content": "The working memory of any cognitive engine is strictly bounded by its context window. Yet human intuition often mistakes raw capacity for comprehension. Just because a model can ingest a million tokens does not mean every token receives equal attentional fidelity.\n\nEffective prompt architecture is fundamentally the art of signal curation. By isolating noise, anchoring relevant facts, and maintaining consistent schemas, we construct environments where inference remains sharp, disciplined, and reliable."
+        }
+      ],
+      "salesCount": 482,
+      "rating": 4.9,
+      "reviewCount": 38,
+      "isDemoData": true,
+      "createdAt": "2026-04-15T10:00:00Z",
+      "updatedAt": "2026-04-15T10:00:00Z"
+    },
+    {
+      "id": "book-wealth-playbook",
+      "title": "The Modern Wealth Playbook",
+      "subtitle": "Strategies for Building Lasting Prosperity in an Evolving Global Economy",
+      "author": "VINOTH BOOKS Publishing",
+      "shortDescription": "A timeless, sovereign approach to financial independence, asynchronous income, and asymmetric investments.",
+      "fullDescription": "True wealth is not merely money in a bank account; it is absolute autonomy over your time, location, and creative energy. \"The Modern Wealth Playbook\" maps out the transition from hourly labor to capital-efficient digital ownership. Learn how to construct enduring cashflow assets, navigate modern volatility, and build generational financial sovereignty.",
+      "category": "Finance and Money Management",
+      "coverImage": "/src/assets/images/book_cover_wealth_playbook_1793365306099.jpg",
+      "originalPrice": 1499,
+      "sellingPrice": 899,
+      "language": "English",
+      "pages": 284,
+      "isbn": "978-93-5467-102-9",
+      "publicationDate": "2026-03-10",
+      "tags": [
+        "Wealth",
+        "Finance",
+        "Investing",
+        "Independence",
+        "Economics"
+      ],
+      "featured": true,
+      "bestSeller": true,
+      "isFree": false,
+      "status": "published",
+      "keyLearnings": [
+        "Decouple income generation from physical hours worked forever.",
+        "Master the 4 levers of high leverage: code, media, capital, and labor.",
+        "Protect your purchasing power against currency debasement.",
+        "Build asymmetric portfolios with capped downside and uncapped upside."
+      ],
+      "tableOfContents": [
+        "Chapter 1: The Illusion of Linear Labor",
+        "Chapter 2: The Four Levers of Permissionless Leverage",
+        "Chapter 3: Asset Velocity vs Asset Quality",
+        "Chapter 4: The Sovereign Balance Sheet",
+        "Chapter 5: Cashflow Architecture for Digital Creators",
+        "Chapter 6: Generational Compounding"
+      ],
+      "sampleContent": [
+        {
+          "chapterTitle": "Chapter 1: The Illusion of Linear Labor",
+          "content": "The modern education system was engineered in the industrial age to produce reliable factory operators and clerical staff. It conditioned us to view compensation as an unbending ratio: one hour of physical presence equals a fixed wage.\n\nYet the digital economy rewards judgment, risk tolerance, and asset ownership at scales unimaginable to our predecessors. A digital publication works once; the digital artifact duplicates at zero marginal cost millions of times.\n\nUntil you own assets that work when you are asleep, your financial existence remains fragile."
+        }
+      ],
+      "salesCount": 620,
+      "rating": 4.95,
+      "reviewCount": 52,
+      "isDemoData": true,
+      "createdAt": "2026-03-10T08:30:00Z",
+      "updatedAt": "2026-03-10T08:30:00Z"
+    },
+    {
+      "id": "book-deep-focus",
+      "title": "Deep Focus & Flow: The Art of Effortless Mastery",
+      "subtitle": "Reclaiming Your Attention and Achieving Extraordinary Cognitive Depth",
+      "author": "VINOTH BOOKS Publishing",
+      "shortDescription": "Practical neuro-protocols and psychological frameworks to defeat distraction, harness flow states, and execute at peak velocity.",
+      "fullDescription": "In an attention-economy weaponized against your focus, the ability to concentrate deeply is the single highest-value capability you can possess. \"Deep Focus & Flow\" reveals how top thinkers, engineers, and creators establish ironclad attention boundaries, systematically induce flow states, and accomplish in four uninterrupted hours what others struggle to do in forty.",
+      "category": "Productivity",
+      "coverImage": "/src/assets/images/book_cover_deep_focus_1793365304657.jpg",
+      "originalPrice": 999,
+      "sellingPrice": 599,
+      "language": "English",
+      "pages": 226,
+      "isbn": "978-93-5467-103-6",
+      "publicationDate": "2026-02-18",
+      "tags": [
+        "Productivity",
+        "Focus",
+        "Flow",
+        "Habits",
+        "Psychology"
+      ],
+      "featured": true,
+      "bestSeller": false,
+      "isFree": false,
+      "status": "published",
+      "keyLearnings": [
+        "Dismantle notification addiction using dopamine recalibration protocols.",
+        "Structure your day into untouchable 90-minute ultradian rhythm deep blocks.",
+        "Cultivate psychological friction against low-value compulsive behaviors.",
+        "Enter flow states on command through deliberate pre-work ignition rituals."
+      ],
+      "tableOfContents": [
+        "Chapter 1: The War for Your Attention Span",
+        "Chapter 2: Dopamine Chemistry & The Distraction Loop",
+        "Chapter 3: The Architecture of the Flow State",
+        "Chapter 4: The 4-Hour Deep Work Protocol",
+        "Chapter 5: Digital Minimalism for Builders",
+        "Chapter 6: Sustainable Energy & Cognitive Renewal"
+      ],
+      "sampleContent": [
+        {
+          "chapterTitle": "Chapter 1: The War for Your Attention Span",
+          "content": "Look closely at how most people spend their mornings. Before their feet have touched the floor, their retinas are bombarded by notifications, urgent subject lines, algorithmic outrage, and endless micro-stimuli.\n\nBy 9:00 AM, their cognitive reservoir is already drained. They sit down to write, code, or build a company, but their mind is scattered across fifty different tabs.\n\nDeep focus is not a personality trait. It is an architectural discipline. When you control your environmental cues, you eliminate the exhausting need for heroic willpower."
+        }
+      ],
+      "salesCount": 395,
+      "rating": 4.88,
+      "reviewCount": 31,
+      "isDemoData": true,
+      "createdAt": "2026-02-18T09:15:00Z",
+      "updatedAt": "2026-02-18T09:15:00Z"
+    },
+    {
+      "id": "book-digital-product-blueprint",
+      "title": "The 24-Hour Digital Product Blueprint",
+      "subtitle": "How to Package Knowledge, Publish Online, and Make Your First Digital Sale",
+      "author": "VINOTH BOOKS Publishing",
+      "shortDescription": "Free starter guide detailing how to transform expertise into an independent eBook business.",
+      "fullDescription": "A complimentary masterclass from VINOTH BOOKS. Learn the step-by-step method used to publish, distribute, and monetize intellectual property directly on the web. No corporate gatekeepers, no traditional publishers taking 90% royalties—just pure creator sovereignty.",
+      "category": "Business and Entrepreneurship",
+      "coverImage": "/src/assets/images/book_cover_wealth_playbook_1793365306099.jpg",
+      "originalPrice": 499,
+      "sellingPrice": 0,
+      "language": "English",
+      "pages": 110,
+      "isbn": "978-93-5467-104-3",
+      "publicationDate": "2026-01-05",
+      "tags": [
+        "Free",
+        "Publishing",
+        "Business",
+        "eBooks",
+        "Digital Products"
+      ],
+      "featured": false,
+      "bestSeller": false,
+      "isFree": true,
+      "status": "published",
+      "keyLearnings": [
+        "Identify profitable knowledge niches with high reader willingness to pay.",
+        "Structure a compelling non-fiction book outline in under 3 hours.",
+        "Choose modern digital formats (PDF, EPUB) and reader-friendly layouts.",
+        "Launch directly to readers with zero platform middlemen fees."
+      ],
+      "tableOfContents": [
+        "Chapter 1: Why Digital Publishing is Sovereign",
+        "Chapter 2: Finding Your Asymmetric Topic",
+        "Chapter 3: The Rapid Drafting Framework",
+        "Chapter 4: Direct Distribution & Payment Setup",
+        "Chapter 5: Nurturing a Dedicated Readership"
+      ],
+      "sampleContent": [
+        {
+          "chapterTitle": "Chapter 1: Why Digital Publishing is Sovereign",
+          "content": "Traditional book publishing is an antique industry built on scarcity, long print cycles, and asymmetric contracts where authors surrender ownership of their copyright for modest advances.\n\nDirect digital publishing changes everything. You retain 100% of your intellectual freedom, set your own pricing, build a direct relationship with every customer, and update your books instantaneously as the world evolves.\n\nWelcome to VINOTH BOOKS. Let us build the future of reading together."
+        }
+      ],
+      "salesCount": 1420,
+      "rating": 4.92,
+      "reviewCount": 88,
+      "isDemoData": true,
+      "createdAt": "2026-01-05T07:00:00Z",
+      "updatedAt": "2026-01-05T07:00:00Z"
+    },
+    {
+      "id": "book-systematic-thinking",
+      "title": "Systematic Thinking: Solving Intractable Problems",
+      "subtitle": "Mental Models, Feedback Loops, and Second-Order Reasoning",
+      "author": "VINOTH BOOKS Publishing",
+      "shortDescription": "How to look beyond immediate symptoms, anticipate unintended consequences, and engineer elegant resolutions.",
+      "fullDescription": "Most failures in business and life occur not because people lack effort, but because they solve the wrong problem. \"Systematic Thinking\" equips you with the cognitive toolkit of master strategists, systems engineers, and world-class leaders to deconstruct complex challenges into manageable leverage points.",
+      "category": "Self Improvement",
+      "coverImage": "/src/assets/images/book_cover_ai_revolution_1793365303535.jpg",
+      "originalPrice": 1199,
+      "sellingPrice": 699,
+      "language": "English",
+      "pages": 254,
+      "isbn": "978-93-5467-105-0",
+      "publicationDate": "2026-04-01",
+      "tags": [
+        "Systems",
+        "Mental Models",
+        "Strategy",
+        "Decision Making"
+      ],
+      "featured": false,
+      "bestSeller": false,
+      "isFree": false,
+      "status": "published",
+      "keyLearnings": [
+        "Differentiate between superficial symptoms and deep systemic root causes.",
+        "Map positive and negative feedback loops in organizations and habits.",
+        "Apply second-order and inverted thinking before major decisions.",
+        "Avoid common cognitive blindspots when navigating uncertainty."
+      ],
+      "tableOfContents": [
+        "Chapter 1: The Trap of First-Order Reactions",
+        "Chapter 2: Stock and Flow Dynamics",
+        "Chapter 3: The Inversion Principle",
+        "Chapter 4: Bottlenecks & Theory of Constraints",
+        "Chapter 5: Designing Antifragile Systems"
+      ],
+      "sampleContent": [
+        {
+          "chapterTitle": "Chapter 1: The Trap of First-Order Reactions",
+          "content": "First-order thinking is simple, immediate, and nearly universal. It asks: \"What will happen right after I take this action?\"\n\nSecond-order thinking is deeper, nuanced, and rare. It asks: \"And then what? And what will the consequences of those consequences be over five years?\"\n\nBy learning to pause at the threshold of reaction and run the mental simulation three steps ahead, you make decisions that look like prescience to those trapped in the immediate present."
+        }
+      ],
+      "salesCount": 230,
+      "rating": 4.85,
+      "reviewCount": 19,
+      "isDemoData": true,
+      "createdAt": "2026-04-01T11:00:00Z",
+      "updatedAt": "2026-04-01T11:00:00Z"
+    }
+  ],
+  "categories": [
+    {
+      "id": "cat-1",
+      "name": "Self Improvement",
+      "slug": "self-improvement",
+      "description": "Actionable frameworks for personal growth, habit stacking, and life mastery."
+    },
+    {
+      "id": "cat-2",
+      "name": "Personal Development",
+      "slug": "personal-development",
+      "description": "Deep mental models, self-discovery, and cognitive resilience."
+    },
+    {
+      "id": "cat-3",
+      "name": "Business and Entrepreneurship",
+      "slug": "business-and-entrepreneurship",
+      "description": "Zero-to-one business building, bootstrapped ventures, and sustainable growth."
+    },
+    {
+      "id": "cat-4",
+      "name": "Finance and Money Management",
+      "slug": "finance-and-money-management",
+      "description": "Sovereign wealth creation, cashflow architecture, and compounding principles."
+    },
+    {
+      "id": "cat-5",
+      "name": "Artificial Intelligence",
+      "slug": "artificial-intelligence",
+      "description": "Practical AI architectures, agentic workflows, and future-proof digital skills."
+    },
+    {
+      "id": "cat-6",
+      "name": "Technology and Programming",
+      "slug": "technology-and-programming",
+      "description": "Modern software engineering, full-stack craft, and pragmatic system design."
+    },
+    {
+      "id": "cat-7",
+      "name": "Education and Learning",
+      "slug": "education-and-learning",
+      "description": "Accelerated skill acquisition, meta-learning, and intellectual synthesis."
+    },
+    {
+      "id": "cat-8",
+      "name": "Productivity",
+      "slug": "productivity",
+      "description": "Eliminating friction, deep focus workflows, and executive execution."
+    },
+    {
+      "id": "cat-9",
+      "name": "Psychology",
+      "slug": "psychology",
+      "description": "Behavioral economics, human motivation, and cognitive decision biases."
+    },
+    {
+      "id": "cat-10",
+      "name": "Health and Wellness",
+      "slug": "health-and-wellness",
+      "description": "Physical vitality, sleep optimization, and sustainable cognitive performance."
+    },
+    {
+      "id": "cat-11",
+      "name": "Science and Research",
+      "slug": "science-and-research",
+      "description": "First-principles scientific thinking and evidence-based synthesis."
+    },
+    {
+      "id": "cat-12",
+      "name": "Fiction and Short Stories",
+      "slug": "fiction-and-short-stories",
+      "description": "Compelling speculative narratives, human journeys, and digital novellas."
+    },
+    {
+      "id": "cat-13",
+      "name": "Career Development",
+      "slug": "career-development",
+      "description": "High-leverage negotiation, strategic career positioning, and remote influence."
+    },
+    {
+      "id": "cat-14",
+      "name": "Digital Marketing",
+      "slug": "digital-marketing",
+      "description": "Organic distribution, storytelling funnels, and authentic audience architecture."
+    },
+    {
+      "id": "cat-15",
+      "name": "Motivation and Life Lessons",
+      "slug": "motivation-and-life-lessons",
+      "description": "Philosophical reflections, overcoming hardship, and living with purposeful intent."
+    }
+  ],
+  "users": [
+    {
+      "id": "user-admin",
+      "name": "Vinoth (Administrator)",
+      "email": "kalikalivino17@gmail.com",
+      "passwordHash": "f7a52dc5fc12d56566a4f701175fbd99579545cc7050ed9e9f57b3e5a2ae7626f6cfbfb28ad99c59f9c1b63fd3e44983c69d11416fdcfc42a654590611bc6ca0",
+      "salt": "83749f1253ef344e2d9dd788f7ade991",
+      "role": "admin",
+      "library": [
+        "book-ai-mind",
+        "book-wealth-playbook",
+        "book-deep-focus",
+        "book-digital-product-blueprint",
+        "book-systematic-thinking"
+      ],
+      "wishlist": [],
+      "createdAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "user-customer-demo",
+      "name": "Priya Sharma",
+      "email": "reader@vinothbooks.com",
+      "passwordHash": "9c9dcaeda7e7f390343cc7b22ea603aed28bb3778f420537fba32bfd3ea968a8f4eb445380928c2f9c7ea1830793f3cd2dbc83f645ba531ddfd7ea1291c6c1f3",
+      "salt": "6e46d64d16ce3030414b8dd395b58a8b",
+      "role": "customer",
+      "library": [
+        "book-ai-mind",
+        "book-digital-product-blueprint"
+      ],
+      "wishlist": [
+        "book-wealth-playbook"
+      ],
+      "createdAt": "2026-04-10T14:20:00Z"
+    }
+  ],
+  "orders": [
+    {
+      "id": "ORD-2026-8841",
+      "userId": "user-customer-demo",
+      "customerName": "Priya Sharma",
+      "customerEmail": "reader@vinothbooks.com",
+      "items": [
+        {
+          "bookId": "book-ai-mind",
+          "title": "The AI Mind: Architecture of Tomorrow",
+          "price": 799,
+          "coverImage": "/src/assets/images/book_cover_ai_revolution_1793365303535.jpg"
+        }
+      ],
+      "subtotal": 799,
+      "discount": 0,
+      "total": 799,
+      "paymentStatus": "paid",
+      "razorpayOrderId": "order_test_8841RZP",
+      "razorpayPaymentId": "pay_test_8841TXN",
+      "transactionReference": "TXN-884109284",
+      "paymentMode": "test",
+      "isDemoData": true,
+      "createdAt": "2026-04-10T14:25:00Z"
+    },
+    {
+      "id": "ORD-2026-7912",
+      "userId": "user-karthik",
+      "customerName": "Karthik Raman",
+      "customerEmail": "karthik.r@outlook.com",
+      "items": [
+        {
+          "bookId": "book-wealth-playbook",
+          "title": "The Modern Wealth Playbook",
+          "price": 899,
+          "coverImage": "/src/assets/images/book_cover_wealth_playbook_1793365306099.jpg"
+        },
+        {
+          "bookId": "book-deep-focus",
+          "title": "Deep Focus & Flow: The Art of Effortless Mastery",
+          "price": 599,
+          "coverImage": "/src/assets/images/book_cover_deep_focus_1793365304657.jpg"
+        }
+      ],
+      "subtotal": 1498,
+      "discount": 299,
+      "couponCode": "VINOTH20",
+      "total": 1199,
+      "paymentStatus": "paid",
+      "razorpayOrderId": "order_test_7912RZP",
+      "razorpayPaymentId": "pay_test_7912TXN",
+      "transactionReference": "TXN-791208471",
+      "paymentMode": "test",
+      "isDemoData": true,
+      "createdAt": "2026-04-22T09:10:00Z"
+    }
+  ],
+  "reviews": [
+    {
+      "id": "rev-1",
+      "bookId": "book-ai-mind",
+      "userId": "user-customer-demo",
+      "userName": "Priya Sharma",
+      "rating": 5,
+      "title": "A masterclass in actionable AI architecture",
+      "comment": "Cut straight through the sensationalism and explained how autonomous workflows actually fit together. The chapters on memory and agent cycles paid for the book ten times over.",
+      "verifiedPurchase": true,
+      "status": "approved",
+      "createdAt": "2026-04-12T16:00:00Z"
+    },
+    {
+      "id": "rev-2",
+      "bookId": "book-wealth-playbook",
+      "userId": "user-karthik",
+      "userName": "Karthik Raman",
+      "rating": 5,
+      "title": "Transformed how I view assets and leverage",
+      "comment": "The chapter on the 4 levers of permissionless leverage was a turning point for my digital agency. Writes with calm authority and razor-sharp economy of language.",
+      "verifiedPurchase": true,
+      "status": "approved",
+      "createdAt": "2026-04-24T11:45:00Z"
+    },
+    {
+      "id": "rev-3",
+      "bookId": "book-deep-focus",
+      "userId": "user-ananya",
+      "userName": "Dr. Ananya Sen",
+      "rating": 5,
+      "title": "The 4-hour deep work protocol genuinely works",
+      "comment": "As a researcher, concentration is my trade. The practical environmental cues and dopamine recalibration rituals in this book helped me complete my manuscript in record time.",
+      "verifiedPurchase": true,
+      "status": "approved",
+      "createdAt": "2026-04-25T14:10:00Z"
+    }
+  ],
+  "feedbacks": [
+    {
+      "id": "fb-1",
+      "customerName": "Anand Sundaram",
+      "customerEmail": "anand.sundaram@gmail.com",
+      "subject": "Question on EPUB formatting on Boox Palma",
+      "message": "Hello Vinoth Books team, I purchased \"The AI Mind\" and it reads wonderfully on my web browser. Could you advise if future releases will include pre-formatted Kindle mobi/kfx files as well?",
+      "category": "technical",
+      "status": "replied",
+      "replies": [
+        {
+          "id": "rep-1",
+          "senderRole": "admin",
+          "senderName": "VINOTH BOOKS Desk",
+          "message": "Hello Anand, thank you for writing in! Yes, all our EPUB files are standard EPUB3 compliant and can be sent directly to your Kindle or Boox e-reader using \"Send to Kindle\" or Calibre. We are also testing automated Kindle whispernet delivery.",
+          "createdAt": "2026-04-26T10:30:00Z"
+        }
+      ],
+      "createdAt": "2026-04-26T08:15:00Z",
+      "updatedAt": "2026-04-26T10:30:00Z"
+    },
+    {
+      "id": "fb-2",
+      "customerName": "Divya Nair",
+      "customerEmail": "divya.nair@techlead.io",
+      "subject": "Bulk student licensing for University Seminar",
+      "message": "We are organizing an executive masterclass on Systems Thinking in Bengaluru and would like to license 80 digital copies of \"Systematic Thinking\". Do you offer institutional discounts?",
+      "category": "order",
+      "status": "open",
+      "replies": [],
+      "createdAt": "2026-04-28T14:40:00Z",
+      "updatedAt": "2026-04-28T14:40:00Z"
+    }
+  ],
+  "coupons": [
+    {
+      "id": "coup-1",
+      "code": "VINOTH20",
+      "discountType": "percentage",
+      "discountValue": 20,
+      "minPurchase": 500,
+      "expiresAt": "2027-12-31",
+      "isActive": true,
+      "usageCount": 142
+    },
+    {
+      "id": "coup-2",
+      "code": "LAUNCH50",
+      "discountType": "percentage",
+      "discountValue": 50,
+      "minPurchase": 1000,
+      "expiresAt": "2027-12-31",
+      "isActive": true,
+      "usageCount": 89
+    },
+    {
+      "id": "coup-3",
+      "code": "WELCOME100",
+      "discountType": "fixed",
+      "discountValue": 100,
+      "minPurchase": 499,
+      "expiresAt": "2027-12-31",
+      "isActive": true,
+      "usageCount": 215
+    }
+  ],
+  "newsletter": [
+    {
+      "id": "sub-1",
+      "email": "arjun.tech@gmail.com",
+      "subscribedAt": "2026-04-02T10:00:00Z"
+    },
+    {
+      "id": "sub-2",
+      "email": "meera.consulting@yahoo.com",
+      "subscribedAt": "2026-04-14T11:30:00Z"
+    },
+    {
+      "id": "sub-3",
+      "email": "rohit.builder@outlook.com",
+      "subscribedAt": "2026-04-26T08:15:00Z"
+    }
+  ],
+  "paymentSettings": {
+    "mode": "test",
+    "testKeyId": "rzp_test_Tu9ODZYh6v1Ujc",
+    "testKeySecret": "8xTolnSGoyAEMTCa4nLNmTpe",
+    "liveKeyId": "",
+    "liveKeySecret": "",
+    "currency": "INR",
+    "isLiveConfirmed": false,
+    "updatedAt": "2026-10-31T09:38:30.065Z"
+  },
+  "websiteSettings": {
+    "storeName": "VINOTH BOOKS",
+    "tagline": "Ideas Into Pages. Knowledge Without Limits.",
+    "supportEmail": "contact@vinothbooks.com",
+    "supportHours": "Monday – Saturday: 9:00 AM – 6:00 PM IST",
+    "announcementBanner": {
+      "enabled": true,
+      "text": "Special Launch Editions · Instant DRM-Free Digital Delivery Worldwide"
+    },
+    "currencySymbol": "₹",
+    "maintenanceMode": false
+  },
+  "legalPages": {
+    "privacyPolicy": "VINOTH BOOKS (\"we\", \"our\", or \"us\") is committed to protecting your privacy. This Privacy Policy explains how your personal information is collected, used, and disclosed by VINOTH BOOKS.\n\n1. Information We Collect\nWhen you register, purchase an eBook, or submit customer feedback, we collect personal information such as your name, email address, transaction identifiers, and purchase history.\n\n2. How We Use Your Information\nWe use your information solely to:\n- Process digital orders and grant secure access to your purchased eBooks.\n- Maintain your personal \"My Library\" and customer account.\n- Communicate book updates, security notifications, and optional editorial dispatches.\n- Prevent fraudulent transactions and verify digital ownership.\n\n3. Payment Security & Data\nWe do not store credit card or debit card numbers on our servers. All transactions are securely processed through Razorpay using industry-standard 256-bit TLS encryption.\n\n4. Digital File Protection\nYour digital download access tokens are generated on demand and validated against your authenticated account. We never sell or monetize customer data.",
+    "termsConditions": "These Terms and Conditions govern your use of VINOTH BOOKS and the digital content purchased through our platform.\n\n1. Direct Digital Publishing License\nWhen you purchase or claim an eBook from VINOTH BOOKS, you are granted a non-exclusive, non-transferable personal license to read, download, and store the digital file on your personal devices.\n\n2. Intellectual Property Rights\nAll eBooks, cover designs, editorial prose, typography, and trademarks remain the sole intellectual property of VINOTH BOOKS. Redistribution, reselling, public file sharing, automated scraping, or unauthorized reproduction is strictly prohibited.\n\n3. Account Integrity\nYou are responsible for maintaining the confidentiality of your account credentials. VINOTH BOOKS reserves the right to terminate accounts that attempt unauthorized download exploitation.\n\n4. Governing Law\nThese terms are governed by the laws of India.",
+    "refundPolicy": "At VINOTH BOOKS, we take immense pride in the editorial quality and intellectual density of every book we publish.\n\n1. Digital Product Nature\nBecause eBooks are digital products delivered instantaneously upon verified payment, they cannot be physically returned once downloaded or accessed.\n\n2. 7-Day Editorial Satisfaction Guarantee\nIf you experience a technical defect in the file format, an inability to access the digital reader, or duplicate charges during checkout, please email our support team at contact@vinothbooks.com within 7 days of purchase. We will promptly resolve the technical issue or issue a full refund to your original payment method.\n\n3. Free eBooks\nBooks labeled as Free eBooks require no payment and are non-refundable.",
+    "deliveryPolicy": "Digital Product Delivery Policy:\n\n1. Instant Automated Delivery\nAll eBooks purchased on VINOTH BOOKS are digital products. No physical item will be shipped.\nImmediately upon verified payment confirmation, the eBook is instantly unlocked in your account under \"My Library\".\n\n2. Access Channels\nCustomers can access their books via:\n- Instant in-browser reader with full table of contents and reading progress.\n- Direct secure digital file download (PDF/EPUB formats) for reading on Kindle, iPad, e-readers, or mobile devices.\n\n3. Lifetime Access\nOnce purchased, books remain accessible in your account library with unlimited re-downloads for personal use.",
+    "contactSupport": {
+      "email": "contact@vinothbooks.com",
+      "responseHours": "Monday – Saturday: 9:00 AM – 6:00 PM IST",
+      "supportNote": "We typically respond to reader and customer inquiries within 12 to 24 hours."
+    }
+  }
+}
