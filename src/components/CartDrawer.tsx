@@ -3,6 +3,7 @@ import { X, Trash2, ArrowRight, Tag, ShieldCheck, Download, Sparkles } from 'luc
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
+import { resolveBookCover } from '../utils/imageUrl';
 
 export const CartDrawer: React.FC = () => {
   const {
@@ -100,7 +101,7 @@ export const CartDrawer: React.FC = () => {
                   className="flex gap-4 p-3.5 bg-[var(--bg-surface-card)] border border-[var(--border-subtle)] rounded-xl shadow-xs items-start"
                 >
                   <img
-                    src={book.coverImage}
+                    src={resolveBookCover(book.coverImage)}
                     alt={book.title}
                     referrerPolicy="no-referrer"
                     className="w-16 h-22 object-cover rounded shadow-xs shrink-0"

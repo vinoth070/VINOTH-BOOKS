@@ -4,6 +4,7 @@ import { Order } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
 import { apiClient } from '../services/apiClient';
+import { resolveBookCover } from '../utils/imageUrl';
 
 export const OrdersView: React.FC<{ onNavigate: (view: string) => void }> = ({ onNavigate }) => {
   const { token, user } = useAuth();
@@ -100,7 +101,7 @@ export const OrdersView: React.FC<{ onNavigate: (view: string) => void }> = ({ o
                   <div key={item.bookId} className="py-3 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 min-w-0">
                       <img
-                        src={item.coverImage}
+                        src={resolveBookCover(item.coverImage)}
                         alt={item.title}
                         className="w-10 h-14 object-cover rounded shadow-xs shrink-0 bg-slate-900"
                       />

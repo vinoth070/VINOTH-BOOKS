@@ -48,11 +48,17 @@ export interface User {
   library: string[];
   wishlist?: string[];
   photoURL?: string;
+  avatar?: string;
   phone?: string;
   bio?: string;
   language?: string;
   theme?: 'dark' | 'light' | 'system';
   emailVerified?: boolean;
+  notifications?: {
+    emailUpdates?: boolean;
+    orderAlerts?: boolean;
+    newsletter?: boolean;
+  };
   createdAt?: string;
   updatedAt?: string;
 }

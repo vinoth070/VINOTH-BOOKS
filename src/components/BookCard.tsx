@@ -4,6 +4,7 @@ import { Book } from '../types';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
+import { resolveBookCover } from '../utils/imageUrl';
 
 interface BookCardProps {
   book: Book;
@@ -44,7 +45,7 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onSelect, onOpenReader
         {/* The 3D Book Structure with spine and page edges */}
         <div className="book-card-spine w-full h-full relative rounded-r-md overflow-hidden shadow-[var(--spine-shadow)]">
           <img
-            src={book.coverImage}
+            src={resolveBookCover(book.coverImage)}
             alt={book.title}
             referrerPolicy="no-referrer"
             loading="lazy"

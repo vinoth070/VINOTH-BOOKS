@@ -7,6 +7,7 @@ import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
   sendPasswordResetEmail,
+  updateProfile,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   User as FirebaseUser
@@ -26,6 +27,13 @@ import {
   orderBy,
   onSnapshot
 } from 'firebase/firestore';
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject
+} from 'firebase/storage';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase App
@@ -33,6 +41,9 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore with configured database ID
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// Initialize Firebase Storage
+export const storage = getStorage(app, firebaseConfig.storageBucket);
 
 // Initialize Auth
 export const auth = getAuth(app);
@@ -107,6 +118,7 @@ export {
   createUserWithEmailAndPassword,
   sendEmailVerification,
   sendPasswordResetEmail,
+  updateProfile,
   firebaseSignOut,
   onAuthStateChanged,
   doc,
@@ -119,6 +131,10 @@ export {
   query,
   where,
   orderBy,
-  onSnapshot
+  onSnapshot,
+  storageRef,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject
 };
 export type { FirebaseUser };

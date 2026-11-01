@@ -74,21 +74,31 @@ function MainApp() {
     fetchData();
   }, [token]);
 
-  // Handle hash changes for browser history back/forward
+  // Handle hash and pathname changes for browser history back/forward & GitHub Pages SPA
   useEffect(() => {
-    const handleHash = () => {
-      const hash = window.location.hash.replace('#/', '') || 'home';
-      if (hash.startsWith('book/')) {
-        const id = hash.replace('book/', '');
+    const handleRoute = () => {
+      let route = window.location.hash.replace(/^#\/?/, '') || '';
+      if (!route) {
+        const rawPath = window.location.pathname.replace(import.meta.env.BASE_URL, '').replace(/^\//, '');
+        if (rawPath) route = rawPath;
+      }
+      route = route || 'home';
+
+      if (route.startsWith('book/')) {
+        const id = route.replace('book/', '');
         setCurrentView('book');
         setViewParams({ bookId: id });
-      } else if (['home', 'explore', 'categories', 'library', 'orders', 'wishlist', 'settings', 'legal', 'admin'].includes(hash)) {
-        setCurrentView(hash);
+      } else if (['home', 'explore', 'categories', 'library', 'orders', 'wishlist', 'settings', 'legal', 'admin'].includes(route)) {
+        setCurrentView(route);
       }
     };
-    handleHash();
-    window.addEventListener('hashchange', handleHash);
-    return () => window.removeEventListener('hashchange', handleHash);
+    handleRoute();
+    window.addEventListener('hashchange', handleRoute);
+    window.addEventListener('popstate', handleRoute);
+    return () => {
+      window.removeEventListener('hashchange', handleRoute);
+      window.removeEventListener('popstate', handleRoute);
+    };
   }, []);
 
   // Silent automatic redirect for non-admin users reaching admin route

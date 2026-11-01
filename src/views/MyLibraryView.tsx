@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
 import { apiClient } from '../services/apiClient';
 import { FALLBACK_BOOKS } from '../data/fallbackData';
+import { resolveBookCover } from '../utils/imageUrl';
 
 interface MyLibraryViewProps {
   onOpenReader: (book: Book) => void;
@@ -152,7 +153,7 @@ export const MyLibraryView: React.FC<MyLibraryViewProps> = ({ onOpenReader, onSe
             >
               <div className="p-5 flex gap-4">
                 <img
-                  src={book.coverImage}
+                  src={resolveBookCover(book.coverImage)}
                   alt={book.title}
                   referrerPolicy="no-referrer"
                   className="w-20 h-28 object-cover rounded-lg shadow-xs shrink-0 bg-slate-900"

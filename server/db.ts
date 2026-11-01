@@ -56,10 +56,16 @@ export interface User {
   library: string[];
   wishlist: string[];
   photoURL?: string;
+  avatar?: string;
   phone?: string;
   bio?: string;
   language?: string;
   theme?: 'dark' | 'light' | 'system';
+  notifications?: {
+    emailUpdates?: boolean;
+    orderAlerts?: boolean;
+    newsletter?: boolean;
+  };
   emailVerified?: boolean;
   createdAt: string;
   updatedAt?: string;

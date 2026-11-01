@@ -1,42 +1,60 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   User as UserIcon, Shield, Moon, Sun, Monitor, Globe, Check, Eye, EyeOff,
-  AlertTriangle, Save, RotateCcw, KeyRound, Smartphone, Mail, Sparkles, LogOut, Trash2
+  AlertTriangle, Save, RotateCcw, KeyRound, Smartphone, Mail, Sparkles, LogOut, Trash2,
+  Camera, Upload, X, Bell, RefreshCw
 } from 'lucide-react';
 import { useAuth, evaluatePasswordRules, isPasswordStrong } from '../context/AuthContext';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { useI18n } from '../context/I18nContext';
-import { db, doc, updateDoc } from '../firebase';
 import { apiClient } from '../services/apiClient';
+import { uploadProfilePicture, validateImageFile } from '../services/avatarService';
+import { resolveAvatarUrl } from '../utils/imageUrl';
 
 interface SettingsViewProps {
   onNavigate: (view: string) => void;
-  initialTab?: 'profile' | 'security' | 'appearance' | 'language';
+  initialTab?: 'profile' | 'account' | 'preferences' | 'security' | 'language';
 }
 
-const AVATAR_OPTIONS = [
-  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80',
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=250&q=80',
-  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=250&q=80',
-  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=250&q=80',
-  'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=250&q=80',
-  'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=250&q=80'
-];
-
 export const SettingsView: React.FC<SettingsViewProps> = ({ onNavigate, initialTab = 'profile' }) => {
-  const { user, token, logout, forgotPassword, refreshUser } = useAuth();
+  const {
+    user,
+    token,
+    logout,
+    forgotPassword,
+    resendVerificationEmail,
+    updateUserProfile,
+    removeProfilePicture
+  } = useAuth();
+
   const { theme, resolvedTheme, setTheme } = useTheme();
   const { language, setLanguage, t, supportedLanguages, dir, isRTL } = useI18n();
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'appearance' | 'language'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'profile' | 'account' | 'preferences' | 'security' | 'language'>(
+    initialTab === 'account' ? 'account' : initialTab === 'preferences' ? 'preferences' : initialTab === 'security' ? 'security' : initialTab === 'language' ? 'language' : 'profile'
+  );
 
   // Profile Form State
   const [displayName, setDisplayName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [bio, setBio] = useState(user?.bio || '');
-  const [photoURL, setPhotoURL] = useState(user?.photoURL || AVATAR_OPTIONS[0]);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMsg, setProfileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Profile Picture Upload State
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [avatarMsg, setAvatarMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Notification Preferences State
+  const [emailUpdates, setEmailUpdates] = useState(user?.notifications?.emailUpdates ?? true);
+  const [orderAlerts, setOrderAlerts] = useState(user?.notifications?.orderAlerts ?? true);
+  const [newsletter, setNewsletter] = useState(user?.notifications?.newsletter ?? true);
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const [prefsMsg, setPrefsMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Password Change State
   const [currentPassword, setCurrentPassword] = useState('');
@@ -47,6 +65,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onNavigate, initialT
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Email verification status
+  const [verificationLoading, setVerificationLoading] = useState(false);
+  const [verificationMsg, setVerificationMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   // Account Deletion State
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -54,59 +76,203 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onNavigate, initialT
   // Search Language State
   const [searchLangQuery, setSearchLangQuery] = useState('');
 
+  // Sync state when user record changes
   useEffect(() => {
     if (user) {
       setDisplayName(user.name || '');
       setPhone(user.phone || '');
       setBio(user.bio || '');
-      if (user.photoURL) setPhotoURL(user.photoURL);
+      if (user.notifications) {
+        setEmailUpdates(user.notifications.emailUpdates ?? true);
+        setOrderAlerts(user.notifications.orderAlerts ?? true);
+        setNewsletter(user.notifications.newsletter ?? true);
+      }
     }
   }, [user]);
 
-  // Handle Profile Save
+  // Clean up object URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  // Native File Picker Change Handler (works on desktop files, mobile gallery, and file manager)
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAvatarMsg(null);
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      setAvatarMsg({ type: 'error', text: validation.error || 'Invalid image file.' });
+      return;
+    }
+
+    if (previewUrl && previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    const localUrl = URL.createObjectURL(file);
+    setSelectedFile(file);
+    setPreviewUrl(localUrl);
+  };
+
+  // Cancel file selection
+  const handleCancelSelection = () => {
+    if (previewUrl && previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    setUploadProgress(null);
+    setAvatarMsg(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Save / Upload Profile Picture
+  const handleSaveProfilePicture = async () => {
+    if (!selectedFile || !user) return;
+
+    setUploadLoading(true);
+    setUploadProgress(0);
+    setAvatarMsg(null);
+
+    try {
+      // 1. Upload to Firebase Storage with progress tracking
+      const downloadUrl = await uploadProfilePicture(user.id, selectedFile, (pct) => {
+        setUploadProgress(pct);
+      });
+
+      // 2. Persist in user record (updates state, localStorage, Firebase Auth, and Firestore)
+      const res = await updateUserProfile({
+        photoURL: downloadUrl,
+        avatar: downloadUrl
+      });
+
+      if (!res.success) {
+        throw new Error(res.error || 'Failed to update user profile with image URL.');
+      }
+
+      setAvatarMsg({
+        type: 'success',
+        text: 'Profile picture uploaded and saved successfully! Updated across your reader space.'
+      });
+
+      // Clear pending selection
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      setSelectedFile(null);
+      setPreviewUrl(null);
+      setUploadProgress(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (err: any) {
+      setAvatarMsg({
+        type: 'error',
+        text: err.message || 'Failed to upload profile picture. Please verify connection and retry.'
+      });
+      setUploadProgress(null);
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
+  // Remove Profile Picture
+  const handleRemoveProfilePicture = async () => {
+    if (!user) return;
+    setUploadLoading(true);
+    setAvatarMsg(null);
+    try {
+      await removeProfilePicture();
+      handleCancelSelection();
+      setAvatarMsg({ type: 'success', text: 'Profile picture removed. Restored default monogram avatar.' });
+    } catch (err: any) {
+      setAvatarMsg({ type: 'error', text: err.message || 'Failed to remove profile picture.' });
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
+  // Handle Profile Details Save
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) return;
+    if (!user) return;
 
     setProfileSaving(true);
     setProfileMsg(null);
 
     try {
-      // 1. Sync with backend database
-      try {
-        await apiClient.put('/api/auth/profile', {
-          name: displayName.trim(),
-          phone: phone.trim(),
-          bio: bio.trim(),
-          photoURL: photoURL.trim(),
-          language,
-          theme
-        });
-      } catch (apiErr: any) {
-        console.warn('Backend profile update note:', apiErr.message);
+      const res = await updateUserProfile({
+        name: displayName.trim(),
+        phone: phone.trim(),
+        bio: bio.trim()
+      });
+
+      if (!res.success) {
+        throw new Error(res.error || 'Failed to save profile changes.');
       }
 
-      // 2. Sync with Cloud Firestore
-      if (user?.id) {
-        try {
-          await updateDoc(doc(db, 'users', user.id), {
-            name: displayName.trim(),
-            phone: phone.trim(),
-            bio: bio.trim(),
-            photoURL: photoURL.trim(),
-            updatedAt: new Date().toISOString()
-          });
-        } catch (fbErr) {
-          console.warn('Firestore profile sync note:', fbErr);
-        }
-      }
-
-      await refreshUser();
-      setProfileMsg({ type: 'success', text: t('settings.saved', 'Profile updated successfully!') });
+      setProfileMsg({ type: 'success', text: t('settings.saved', 'Profile information updated successfully!') });
     } catch (err: any) {
       setProfileMsg({ type: 'error', text: err.message || 'Error updating profile' });
     } finally {
       setProfileSaving(false);
+    }
+  };
+
+  // Save Notification Preferences
+  const handleSavePreferences = async () => {
+    if (!user) return;
+    setPrefsSaving(true);
+    setPrefsMsg(null);
+
+    try {
+      const notifications = {
+        emailUpdates,
+        orderAlerts,
+        newsletter
+      };
+
+      const res = await updateUserProfile({
+        notifications,
+        theme
+      });
+
+      if (!res.success) {
+        throw new Error(res.error || 'Failed to save preferences.');
+      }
+
+      setPrefsMsg({ type: 'success', text: 'Reader preferences saved and persisted.' });
+    } catch (err: any) {
+      setPrefsMsg({ type: 'error', text: err.message || 'Error saving preferences' });
+    } finally {
+      setPrefsSaving(false);
+    }
+  };
+
+  // Handle Resend Verification Email
+  const handleResendVerification = async () => {
+    setVerificationLoading(true);
+    setVerificationMsg(null);
+    try {
+      const res = await resendVerificationEmail();
+      if (res.success) {
+        setVerificationMsg({ type: 'success', text: res.message || 'Verification email sent. Please check your inbox.' });
+      } else {
+        setVerificationMsg({ type: 'error', text: res.error || 'Could not send verification email.' });
+      }
+    } catch (err: any) {
+      setVerificationMsg({ type: 'error', text: err.message || 'Failed to send verification email' });
+    } finally {
+      setVerificationLoading(false);
     }
   };
 
@@ -167,6 +333,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onNavigate, initialT
   );
 
   const passwordRules = evaluatePasswordRules(newPassword);
+  const activeAvatar = previewUrl || resolveAvatarUrl(user?.photoURL, user?.avatar, user?.name);
+  const hasCustomAvatar = Boolean(user?.photoURL || user?.avatar);
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 animate-in fade-in duration-200">
@@ -181,85 +349,102 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onNavigate, initialT
             {t('settings.title', 'Customer Account Settings')}
           </h1>
           <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-1">
-            {t('settings.subtitle', 'Manage your personal profile, security credentials, appearance, and language.')}
+            {t('settings.subtitle', 'Manage your personal profile, credentials, appearance, and reading language.')}
           </p>
         </div>
 
         {user && (
-          <div className="flex items-center gap-3 bg-[var(--bg-surface-elevated)] px-4 py-2.5 rounded-xl border border-[var(--border-subtle)] self-start sm:self-auto">
+          <div className="flex items-center gap-3 bg-[var(--bg-surface-elevated)] px-4 py-2.5 rounded-xl border border-[var(--border-subtle)] self-start sm:self-auto shadow-xs">
             <img
-              src={photoURL || AVATAR_OPTIONS[0]}
+              src={resolveAvatarUrl(user.photoURL, user.avatar, user.name)}
               alt={user.name}
-              className="w-10 h-10 rounded-full object-cover ring-2 ring-[var(--accent-gold)]"
+              className="w-10 h-10 rounded-full object-cover ring-2 ring-[var(--accent-gold)] shrink-0"
             />
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-bold text-[var(--text-primary)] truncate max-w-[160px]">{user.name}</p>
               <p className="text-[10px] text-[var(--text-muted)] truncate max-w-[160px]">{user.email}</p>
+              <span className="inline-block mt-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--accent-gold)]">
+                {user.role === 'admin' ? 'Publisher Admin' : 'Verified Reader'}
+              </span>
             </div>
           </div>
         )}
       </div>
 
-      {/* Responsive Layout: Sidebar Tabs + Content Area */}
+      {/* Responsive Navigation Tabs (Mobile pills / Desktop sidebar) */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 sm:gap-8">
         
         {/* Navigation Tabs */}
-        <aside className="lg:col-span-1 space-y-1.5">
+        <aside className="lg:col-span-1 space-y-1.5 flex flex-row lg:flex-col overflow-x-auto lg:overflow-x-visible pb-2 lg:pb-0 gap-1 lg:gap-1.5 no-scrollbar">
           <button
             onClick={() => setActiveTab('profile')}
-            className={`w-full text-left px-4 py-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-between transition-all cursor-pointer ${
+            className={`whitespace-nowrap shrink-0 lg:w-full text-left px-4 py-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-between transition-all cursor-pointer ${
               activeTab === 'profile'
                 ? 'bg-[var(--accent-gold)] text-[#0B1325] shadow-sm font-bold'
                 : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 sm:gap-3">
               <UserIcon className="w-4 h-4" />
               <span>{t('settings.profile', 'Profile Settings')}</span>
             </div>
           </button>
 
           <button
+            onClick={() => setActiveTab('account')}
+            className={`whitespace-nowrap shrink-0 lg:w-full text-left px-4 py-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-between transition-all cursor-pointer ${
+              activeTab === 'account'
+                ? 'bg-[var(--accent-gold)] text-[#0B1325] shadow-sm font-bold'
+                : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-muted)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <KeyRound className="w-4 h-4" />
+              <span>Account Credentials</span>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('preferences')}
+            className={`whitespace-nowrap shrink-0 lg:w-full text-left px-4 py-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-between transition-all cursor-pointer ${
+              activeTab === 'preferences'
+                ? 'bg-[var(--accent-gold)] text-[#0B1325] shadow-sm font-bold'
+                : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-muted)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <Bell className="w-4 h-4" />
+              <span>Preferences</span>
+            </div>
+          </button>
+
+          <button
             onClick={() => setActiveTab('security')}
-            className={`w-full text-left px-4 py-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-between transition-all cursor-pointer ${
+            className={`whitespace-nowrap shrink-0 lg:w-full text-left px-4 py-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-between transition-all cursor-pointer ${
               activeTab === 'security'
                 ? 'bg-[var(--accent-gold)] text-[#0B1325] shadow-sm font-bold'
                 : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 sm:gap-3">
               <Shield className="w-4 h-4" />
-              <span>{t('settings.security', 'Account Security')}</span>
-            </div>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('appearance')}
-            className={`w-full text-left px-4 py-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-between transition-all cursor-pointer ${
-              activeTab === 'appearance'
-                ? 'bg-[var(--accent-gold)] text-[#0B1325] shadow-sm font-bold'
-                : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-muted)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Sparkles className="w-4 h-4" />
-              <span>{t('settings.appearance', 'Appearance')}</span>
+              <span>{t('settings.security', 'Privacy & Security')}</span>
             </div>
           </button>
 
           <button
             onClick={() => setActiveTab('language')}
-            className={`w-full text-left px-4 py-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-between transition-all cursor-pointer ${
+            className={`whitespace-nowrap shrink-0 lg:w-full text-left px-4 py-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-between transition-all cursor-pointer ${
               activeTab === 'language'
                 ? 'bg-[var(--accent-gold)] text-[#0B1325] shadow-sm font-bold'
                 : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 sm:gap-3">
               <Globe className="w-4 h-4" />
-              <span>{t('settings.language', 'Language Settings')}</span>
+              <span>{t('settings.language', 'Language')}</span>
             </div>
-            <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-black/10 text-current">
+            <span className="hidden lg:inline-block text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-black/10 text-current">
               {language.toUpperCase()}
             </span>
           </button>
@@ -268,167 +453,341 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onNavigate, initialT
         {/* Tab Content Body */}
         <section className="lg:col-span-3 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-5 sm:p-8 shadow-sm">
           
-          {/* TAB 1: PROFILE SETTINGS */}
+          {/* TAB 1: PROFILE SETTINGS & AVATAR UPLOAD */}
           {activeTab === 'profile' && (
-            <form onSubmit={handleSaveProfile} className="space-y-6 animate-in fade-in duration-150">
+            <div className="space-y-8 animate-in fade-in duration-150">
               <div className="border-b border-[var(--border-subtle)] pb-4">
                 <h2 className="font-serif text-xl font-bold text-[var(--text-primary)]">
                   {t('settings.profile', 'Profile Settings')}
                 </h2>
                 <p className="text-xs text-[var(--text-muted)] mt-1">
-                  Update your reader identity, contact phone, and avatar.
+                  Upload your customized profile picture and manage your reader contact information.
                 </p>
               </div>
 
-              {profileMsg && (
-                <div
-                  className={`p-3.5 rounded-xl text-xs flex items-center gap-2.5 ${
-                    profileMsg.type === 'success'
-                      ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/30'
-                      : 'bg-red-500/10 text-red-500 border border-red-500/30'
-                  }`}
-                >
-                  <Check className="w-4 h-4 shrink-0" />
-                  <span>{profileMsg.text}</span>
-                </div>
-              )}
+              {/* ------------------------------------------------------------- */}
+              {/* PROFILE PICTURE MANAGEMENT SECTION (Feature Requirement #4) */}
+              {/* ------------------------------------------------------------- */}
+              <div className="p-5 sm:p-6 rounded-2xl bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] space-y-5">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--accent-gold)] flex items-center gap-2">
+                      <Camera className="w-4 h-4" />
+                      <span>Profile Picture</span>
+                    </h3>
+                    <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                      Select a portrait photo from your computer, mobile gallery, or device files (JPG, PNG, WEBP max 5MB).
+                    </p>
+                  </div>
 
-              {/* Avatar Selector */}
-              <div>
-                <label className="block text-xs font-semibold text-[var(--text-primary)] mb-2">
-                  Choose Reader Avatar
-                </label>
-                <div className="flex flex-wrap items-center gap-3">
-                  {AVATAR_OPTIONS.map((url, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setPhotoURL(url)}
-                      className={`relative w-12 h-12 rounded-full overflow-hidden transition-all cursor-pointer ring-offset-2 ring-offset-[var(--bg-surface)] ${
-                        photoURL === url ? 'ring-2 ring-[var(--accent-gold)] scale-105' : 'opacity-70 hover:opacity-100'
-                      }`}
-                    >
-                      <img src={url} alt={`Avatar ${i}`} className="w-full h-full object-cover" />
-                      {photoURL === url && (
-                        <div className="absolute inset-0 bg-[var(--accent-gold)]/30 flex items-center justify-center">
-                          <Check className="w-4 h-4 text-white" />
-                        </div>
+                  {uploadProgress !== null && (
+                    <span className="text-xs font-mono font-bold text-[var(--accent-gold)] bg-[var(--accent-gold-muted)] px-2.5 py-1 rounded-full">
+                      Uploading: {uploadProgress}%
+                    </span>
+                  )}
+                </div>
+
+                {avatarMsg && (
+                  <div
+                    className={`p-3.5 rounded-xl text-xs flex items-center gap-2.5 ${
+                      avatarMsg.type === 'success'
+                        ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/30'
+                        : 'bg-red-500/10 text-red-500 border border-red-500/30'
+                    }`}
+                  >
+                    <Check className="w-4 h-4 shrink-0" />
+                    <span>{avatarMsg.text}</span>
+                  </div>
+                )}
+
+                {/* Avatar Display + Action Buttons */}
+                <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
+                  {/* Current / Preview Avatar Image */}
+                  <div className="relative group shrink-0">
+                    <img
+                      src={activeAvatar}
+                      alt={user?.name || 'Reader Avatar'}
+                      className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover ring-2 ring-[var(--accent-gold)] shadow-md bg-[var(--bg-surface-card)] transition-all"
+                    />
+                    {previewUrl && (
+                      <span className="absolute -top-2 -right-2 bg-emerald-500 text-white text-[9px] font-bold uppercase px-2 py-0.5 rounded-full shadow-xs">
+                        Preview
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Actions & File Trigger */}
+                  <div className="flex-1 space-y-3 text-center sm:text-left w-full">
+                    {/* Hidden native file input */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/jpg"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                      aria-label="Upload profile picture"
+                    />
+
+                    {/* Button Controls */}
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
+                      {/* Prominent Change Profile Picture button */}
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadLoading}
+                        className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider bg-[var(--accent-gold)] hover:bg-[var(--accent-gold-hover)] text-[#0B1325] rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                      >
+                        <Upload className="w-4 h-4" />
+                        <span>{selectedFile ? 'Select Different Photo' : 'Change Profile Picture'}</span>
+                      </button>
+
+                      {/* If user has a custom picture and hasn't staged a new one */}
+                      {hasCustomAvatar && !selectedFile && (
+                        <button
+                          type="button"
+                          onClick={handleRemoveProfilePicture}
+                          disabled={uploadLoading}
+                          className="px-3.5 py-2.5 text-xs font-semibold text-red-500 hover:bg-red-500/10 border border-red-500/30 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Remove Picture</span>
+                        </button>
                       )}
-                    </button>
-                  ))}
+                    </div>
+
+                    {/* Pending Preview Staging Bar */}
+                    {selectedFile && (
+                      <div className="p-3.5 rounded-xl bg-[var(--bg-surface-card)] border border-[var(--border-strong)] space-y-2.5 text-left animate-in fade-in">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-[var(--text-primary)] truncate max-w-[200px]">
+                            {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
+                          </span>
+                          <span className="text-[11px] text-emerald-500 font-bold">Ready to Save</span>
+                        </div>
+
+                        {/* Upload progress indicator */}
+                        {uploadProgress !== null && (
+                          <div className="w-full bg-[var(--bg-surface-muted)] h-2 rounded-full overflow-hidden">
+                            <div
+                              className="bg-[var(--accent-gold)] h-full transition-all duration-200"
+                              style={{ width: `${uploadProgress}%` }}
+                            />
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={handleSaveProfilePicture}
+                            disabled={uploadLoading}
+                            className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
+                          >
+                            <Save className="w-3.5 h-3.5" />
+                            <span>{uploadLoading ? 'Uploading...' : 'Save Profile Picture'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleCancelSelection}
+                            disabled={uploadLoading}
+                            className="px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-surface-muted)] border border-[var(--border-subtle)] rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            <span>Cancel</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <p className="text-[11px] text-[var(--text-muted)]">
+                      Your avatar is displayed in the navigation bar, book reviews, reader dashboard, and personal reading space.
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {/* Full Name */}
-              <div>
-                <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1.5">
-                  {t('auth.name', 'Full Name')}
-                </label>
-                <input
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  required
-                  className="w-full px-3.5 py-2.5 bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] rounded-xl text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-gold)]"
-                />
-              </div>
+              {/* Profile Details Form */}
+              <form onSubmit={handleSaveProfile} className="space-y-6">
+                {profileMsg && (
+                  <div
+                    className={`p-3.5 rounded-xl text-xs flex items-center gap-2.5 ${
+                      profileMsg.type === 'success'
+                        ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/30'
+                        : 'bg-red-500/10 text-red-500 border border-red-500/30'
+                    }`}
+                  >
+                    <Check className="w-4 h-4 shrink-0" />
+                    <span>{profileMsg.text}</span>
+                  </div>
+                )}
 
-              {/* Verified Email Address (Read-only for security) */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-semibold text-[var(--text-primary)]">
-                    {t('auth.email', 'Email Address')}
+                {/* Full Name */}
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1.5">
+                    {t('auth.name', 'Full Name')}
                   </label>
-                  <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <Check className="w-3 h-3" />
-                    Verified Email
-                  </span>
-                </div>
-                <div className="relative">
                   <input
-                    type="email"
-                    value={user?.email || ''}
-                    disabled
-                    className="w-full px-3.5 py-2.5 bg-[var(--bg-surface-muted)] border border-[var(--border-subtle)] rounded-xl text-xs text-[var(--text-muted)] cursor-not-allowed"
-                  />
-                  <Mail className="absolute right-3.5 top-2.5 w-4 h-4 text-[var(--text-muted)]" />
-                </div>
-                <p className="text-[11px] text-[var(--text-muted)] mt-1">
-                  Primary email addresses are bound to your verified Firebase security identity.
-                </p>
-              </div>
-
-              {/* Contact Phone Number */}
-              <div>
-                <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1.5">
-                  Phone Number (Optional for order notifications)
-                </label>
-                <div className="relative">
-                  <input
-                    type="tel"
-                    placeholder="+91 98765 43210"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    required
                     className="w-full px-3.5 py-2.5 bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] rounded-xl text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-gold)]"
                   />
-                  <Smartphone className="absolute right-3.5 top-2.5 w-4 h-4 text-[var(--text-muted)]" />
                 </div>
-              </div>
 
-              {/* Reader Bio / Reading Interests */}
-              <div>
-                <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1.5">
-                  Reading Interests & Bio
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="e.g. Interested in Systems Thinking, Artificial Intelligence architecture, and personal leverage."
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] rounded-xl text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-gold)] resize-none"
-                />
-              </div>
+                {/* Email Address */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-[var(--text-primary)]">
+                      {t('auth.email', 'Email Address')}
+                    </label>
+                    {user?.emailVerified ? (
+                      <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Check className="w-3 h-3" />
+                        Verified Email
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                        Pending Verification
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      value={user?.email || ''}
+                      disabled
+                      className="w-full px-3.5 py-2.5 bg-[var(--bg-surface-muted)] border border-[var(--border-subtle)] rounded-xl text-xs text-[var(--text-muted)] cursor-not-allowed"
+                    />
+                    <Mail className="absolute right-3.5 top-2.5 w-4 h-4 text-[var(--text-muted)]" />
+                  </div>
+                  <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                    Primary email addresses are bound to your verified authentication identity.
+                  </p>
+                </div>
 
-              {/* Action Buttons */}
-              <div className="pt-3 border-t border-[var(--border-subtle)] flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (user) {
-                      setDisplayName(user.name);
-                      setPhone(user.phone || '');
-                      setBio(user.bio || '');
-                      setProfileMsg(null);
-                    }
-                  }}
-                  className="px-4 py-2.5 text-xs font-semibold border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:bg-[var(--bg-surface-muted)] rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reset</span>
-                </button>
+                {/* Contact Phone Number */}
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1.5">
+                    Phone Number (Optional for order notifications)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="tel"
+                      placeholder="+91 98765 43210"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] rounded-xl text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-gold)]"
+                    />
+                    <Smartphone className="absolute right-3.5 top-2.5 w-4 h-4 text-[var(--text-muted)]" />
+                  </div>
+                </div>
 
-                <button
-                  type="submit"
-                  disabled={profileSaving}
-                  className="px-6 py-2.5 text-xs font-bold uppercase tracking-wider bg-[var(--accent-gold)] hover:bg-[var(--accent-gold-hover)] text-[#0B1325] rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-2"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>{profileSaving ? t('settings.saving', 'Saving...') : t('settings.save', 'Save Changes')}</span>
-                </button>
-              </div>
-            </form>
+                {/* Reader Bio / Reading Interests */}
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1.5">
+                    Reading Interests & Bio
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="e.g. Focus on artificial intelligence architectures, systems thinking, and independent business."
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] rounded-xl text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-gold)] resize-none"
+                  />
+                </div>
+
+                {/* Action Buttons */}
+                <div className="pt-3 border-t border-[var(--border-subtle)] flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (user) {
+                        setDisplayName(user.name);
+                        setPhone(user.phone || '');
+                        setBio(user.bio || '');
+                        setProfileMsg(null);
+                      }
+                    }}
+                    className="px-4 py-2.5 text-xs font-semibold border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:bg-[var(--bg-surface-muted)] rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset</span>
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={profileSaving}
+                    className="px-6 py-2.5 text-xs font-bold uppercase tracking-wider bg-[var(--accent-gold)] hover:bg-[var(--accent-gold-hover)] text-[#0B1325] rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{profileSaving ? t('settings.saving', 'Saving...') : t('settings.save', 'Save Changes')}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
           )}
 
-          {/* TAB 2: ACCOUNT SECURITY */}
-          {activeTab === 'security' && (
+          {/* TAB 2: ACCOUNT & CREDENTIALS */}
+          {activeTab === 'account' && (
             <div className="space-y-8 animate-in fade-in duration-150">
               <div className="border-b border-[var(--border-subtle)] pb-4">
                 <h2 className="font-serif text-xl font-bold text-[var(--text-primary)]">
-                  {t('settings.security', 'Account Security')}
+                  Account Credentials & Sessions
                 </h2>
                 <p className="text-xs text-[var(--text-muted)] mt-1">
-                  Manage password credentials, multi-device sessions, and account integrity.
+                  Manage password updates, verified email security, and multi-device sessions.
                 </p>
+              </div>
+
+              {/* Email Verification Box */}
+              <div className="p-5 rounded-2xl bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-[var(--accent-gold)]" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-primary)]">
+                      Email Verification Status
+                    </span>
+                  </div>
+                  {user?.emailVerified ? (
+                    <span className="text-xs font-bold text-emerald-500 bg-emerald-500/10 px-3 py-1 rounded-full flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5" />
+                      Email Verified & Authenticated
+                    </span>
+                  ) : (
+                    <span className="text-xs font-bold text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full">
+                      Unverified
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-xs text-[var(--text-secondary)]">
+                  Registered account email: <strong className="text-[var(--text-primary)]">{user?.email}</strong>
+                </p>
+
+                {verificationMsg && (
+                  <div
+                    className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                      verificationMsg.type === 'success'
+                        ? 'bg-emerald-500/10 text-emerald-500'
+                        : 'bg-red-500/10 text-red-500'
+                    }`}
+                  >
+                    <span>{verificationMsg.text}</span>
+                  </div>
+                )}
+
+                {!user?.emailVerified && (
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={verificationLoading}
+                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-[var(--accent-gold)] hover:bg-[var(--accent-gold-hover)] text-[#0B1325] rounded-xl transition-all cursor-pointer flex items-center gap-2"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${verificationLoading ? 'animate-spin' : ''}`} />
+                    <span>{verificationLoading ? 'Sending...' : 'Resend Verification Email'}</span>
+                  </button>
+                )}
               </div>
 
               {/* Change Password Form */}
@@ -451,7 +810,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onNavigate, initialT
                   </div>
                 )}
 
-                {/* Current Password */}
                 <div>
                   <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1.5">
                     Current Password
@@ -467,14 +825,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onNavigate, initialT
                     <button
                       type="button"
                       onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                      className="absolute right-3 top-2.5 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                      className="absolute right-3 top-2.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
                     >
                       {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
 
-                {/* New Password */}
                 <div>
                   <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1.5">
                     New Password
@@ -490,13 +847,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onNavigate, initialT
                     <button
                       type="button"
                       onClick={() => setShowNewPassword(!showNewPassword)}
-                      className="absolute right-3 top-2.5 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                      className="absolute right-3 top-2.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
                     >
                       {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
 
-                  {/* Password rules indicator */}
                   {newPassword.length > 0 && (
                     <div className="mt-2.5 p-3 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] space-y-1 text-[11px]">
                       <div className={`flex items-center gap-1.5 ${passwordRules.minLength ? 'text-emerald-500 font-semibold' : 'text-[var(--text-muted)]'}`}>
@@ -523,7 +879,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onNavigate, initialT
                   )}
                 </div>
 
-                {/* Confirm New Password */}
                 <div>
                   <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1.5">
                     {t('auth.confirmPassword', 'Confirm New Password')}
@@ -561,16 +916,33 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onNavigate, initialT
                 </div>
               </form>
 
-              {/* Device Sessions */}
-              <div className="border-t border-[var(--border-subtle)] pt-6">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-primary)] mb-2">
-                  Session & Device Security
+              {/* Session Information */}
+              <div className="border-t border-[var(--border-subtle)] pt-6 space-y-4">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-primary)]">
+                  Account Session Information
                 </h3>
-                <p className="text-xs text-[var(--text-secondary)] mb-4 leading-relaxed">
-                  Sign out from active web browsers or mobile sessions if you used a shared or public computer.
-                </p>
-                <div className="flex flex-wrap gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="p-3 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)]">
+                    <span className="text-[10px] text-[var(--text-muted)] uppercase block">Account ID</span>
+                    <span className="font-mono text-xs truncate block text-[var(--text-primary)]">{user?.id}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)]">
+                    <span className="text-[10px] text-[var(--text-muted)] uppercase block">Account Role</span>
+                    <span className="font-semibold text-xs text-[var(--accent-gold)] uppercase block">
+                      {user?.role === 'admin' ? 'Administrator' : 'Reader'}
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)]">
+                    <span className="text-[10px] text-[var(--text-muted)] uppercase block">Books in Library</span>
+                    <span className="font-semibold text-xs text-[var(--text-primary)] block">
+                      {user?.library?.length || 0} Owned eBooks
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-3 pt-2">
                   <button
+                    type="button"
                     onClick={() => {
                       logout();
                       onNavigate('home');
@@ -582,6 +954,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onNavigate, initialT
                   </button>
 
                   <button
+                    type="button"
                     onClick={() => {
                       localStorage.clear();
                       logout();
@@ -592,6 +965,201 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onNavigate, initialT
                     <Shield className="w-4 h-4" />
                     <span>{t('settings.signOutAll', 'Sign Out from All Devices')}</span>
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: PREFERENCES & NOTIFICATIONS */}
+          {activeTab === 'preferences' && (
+            <div className="space-y-8 animate-in fade-in duration-150">
+              <div className="border-b border-[var(--border-subtle)] pb-4">
+                <h2 className="font-serif text-xl font-bold text-[var(--text-primary)]">
+                  Reader Preferences & Appearance
+                </h2>
+                <p className="text-xs text-[var(--text-muted)] mt-1">
+                  Configure visual theme contrast and notification dispatches.
+                </p>
+              </div>
+
+              {prefsMsg && (
+                <div
+                  className={`p-3.5 rounded-xl text-xs flex items-center gap-2.5 ${
+                    prefsMsg.type === 'success'
+                      ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/30'
+                      : 'bg-red-500/10 text-red-500 border border-red-500/30'
+                  }`}
+                >
+                  <Check className="w-4 h-4 shrink-0" />
+                  <span>{prefsMsg.text}</span>
+                </div>
+              )}
+
+              {/* Theme Selection */}
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--accent-gold)] mb-3 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  <span>Appearance & Contrast</span>
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setTheme('light')}
+                    className={`p-5 rounded-2xl border text-left transition-all cursor-pointer ${
+                      theme === 'light'
+                        ? 'border-[var(--accent-gold)] bg-[var(--accent-gold-muted)] ring-2 ring-[var(--accent-gold)] shadow-sm'
+                        : 'border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] hover:border-[var(--border-strong)]'
+                    }`}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center mb-3">
+                      <Sun className="w-5 h-5" />
+                    </div>
+                    <h4 className="font-semibold text-sm text-[var(--text-primary)]">Light Mode</h4>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                      Warm parchment tones, optimal for bright daytime reading.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTheme('dark')}
+                    className={`p-5 rounded-2xl border text-left transition-all cursor-pointer ${
+                      theme === 'dark'
+                        ? 'border-[var(--accent-gold)] bg-[var(--accent-gold-muted)] ring-2 ring-[var(--accent-gold)] shadow-sm'
+                        : 'border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] hover:border-[var(--border-strong)]'
+                    }`}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mb-3">
+                      <Moon className="w-5 h-5" />
+                    </div>
+                    <h4 className="font-semibold text-sm text-[var(--text-primary)]">Dark Mode</h4>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                      Deep obsidian luxury with gold accents, gentle on the eyes.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTheme('system')}
+                    className={`p-5 rounded-2xl border text-left transition-all cursor-pointer ${
+                      theme === 'system'
+                        ? 'border-[var(--accent-gold)] bg-[var(--accent-gold-muted)] ring-2 ring-[var(--accent-gold)] shadow-sm'
+                        : 'border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] hover:border-[var(--border-strong)]'
+                    }`}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center mb-3">
+                      <Monitor className="w-5 h-5" />
+                    </div>
+                    <h4 className="font-semibold text-sm text-[var(--text-primary)]">System Default</h4>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                      Synchronize with operating system dark/light mode preference.
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Notification Toggles */}
+              <div className="border-t border-[var(--border-subtle)] pt-6 space-y-4">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--accent-gold)] flex items-center gap-2">
+                  <Bell className="w-4 h-4" />
+                  <span>Notification Preferences</span>
+                </h3>
+
+                <div className="space-y-3">
+                  <label className="flex items-start gap-3 p-3.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] cursor-pointer hover:border-[var(--border-strong)]">
+                    <input
+                      type="checkbox"
+                      checked={emailUpdates}
+                      onChange={(e) => setEmailUpdates(e.target.checked)}
+                      className="mt-0.5 rounded text-[var(--accent-gold)] focus:ring-[var(--accent-gold)] cursor-pointer"
+                    />
+                    <div className="flex-1">
+                      <span className="text-xs font-semibold text-[var(--text-primary)] block">New eBook Releases</span>
+                      <span className="text-[11px] text-[var(--text-muted)] block">
+                        Receive announcements when new volumes are published in your favorite categories.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start gap-3 p-3.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] cursor-pointer hover:border-[var(--border-strong)]">
+                    <input
+                      type="checkbox"
+                      checked={orderAlerts}
+                      onChange={(e) => setOrderAlerts(e.target.checked)}
+                      className="mt-0.5 rounded text-[var(--accent-gold)] focus:ring-[var(--accent-gold)] cursor-pointer"
+                    />
+                    <div className="flex-1">
+                      <span className="text-xs font-semibold text-[var(--text-primary)] block">Order & Download Confirmations</span>
+                      <span className="text-[11px] text-[var(--text-muted)] block">
+                        Get instant transaction receipts and download access links for purchased eBooks.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start gap-3 p-3.5 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] cursor-pointer hover:border-[var(--border-strong)]">
+                    <input
+                      type="checkbox"
+                      checked={newsletter}
+                      onChange={(e) => setNewsletter(e.target.checked)}
+                      className="mt-0.5 rounded text-[var(--accent-gold)] focus:ring-[var(--accent-gold)] cursor-pointer"
+                    />
+                    <div className="flex-1">
+                      <span className="text-xs font-semibold text-[var(--text-primary)] block">VINOTH BOOKS Private Dispatch</span>
+                      <span className="text-[11px] text-[var(--text-muted)] block">
+                        Curated editorial essays, author notes, and systems thinking masterclasses.
+                      </span>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleSavePreferences}
+                    disabled={prefsSaving}
+                    className="px-6 py-2.5 text-xs font-bold uppercase tracking-wider bg-[var(--accent-gold)] hover:bg-[var(--accent-gold-hover)] text-[#0B1325] rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{prefsSaving ? 'Saving...' : 'Save Preferences'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: PRIVACY & SECURITY */}
+          {activeTab === 'security' && (
+            <div className="space-y-8 animate-in fade-in duration-150">
+              <div className="border-b border-[var(--border-subtle)] pb-4">
+                <h2 className="font-serif text-xl font-bold text-[var(--text-primary)]">
+                  {t('settings.security', 'Privacy & Security')}
+                </h2>
+                <p className="text-xs text-[var(--text-muted)] mt-1">
+                  Cryptographic verification, storage sovereignty, and data protection.
+                </p>
+              </div>
+
+              {/* Security Pillars Overview */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] space-y-2">
+                  <div className="flex items-center gap-2 text-emerald-500">
+                    <Shield className="w-4 h-4" />
+                    <span className="text-xs font-bold uppercase">Attribute-Based Access Control</span>
+                  </div>
+                  <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                    Firestore security rules enforce strict user boundary isolation. No reader can view or modify other accounts.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-xl bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] space-y-2">
+                  <div className="flex items-center gap-2 text-[var(--accent-gold)]">
+                    <KeyRound className="w-4 h-4" />
+                    <span className="text-xs font-bold uppercase">HMAC Signature Tokens</span>
+                  </div>
+                  <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                    Digital eBook download tokens are digitally signed with cryptographic SHA-256 verification.
+                  </p>
                 </div>
               </div>
 
@@ -641,99 +1209,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onNavigate, initialT
             </div>
           )}
 
-          {/* TAB 3: APPEARANCE SETTINGS */}
-          {activeTab === 'appearance' && (
-            <div className="space-y-6 animate-in fade-in duration-150">
-              <div className="border-b border-[var(--border-subtle)] pb-4">
-                <h2 className="font-serif text-xl font-bold text-[var(--text-primary)]">
-                  {t('settings.appearance', 'Appearance')}
-                </h2>
-                <p className="text-xs text-[var(--text-muted)] mt-1">
-                  Customize the visual contrast and reading ambiance of VINOTH BOOKS across all pages.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* Light Mode */}
-                <button
-                  type="button"
-                  onClick={() => setTheme('light')}
-                  className={`p-5 rounded-2xl border text-left transition-all cursor-pointer ${
-                    theme === 'light'
-                      ? 'border-[var(--accent-gold)] bg-[var(--accent-gold-muted)] ring-2 ring-[var(--accent-gold)] shadow-sm'
-                      : 'border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] hover:border-[var(--border-strong)]'
-                  }`}
-                >
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center mb-3">
-                    <Sun className="w-5 h-5" />
-                  </div>
-                  <h3 className="font-semibold text-sm text-[var(--text-primary)]">Light Mode</h3>
-                  <p className="text-[11px] text-[var(--text-muted)] mt-1">
-                    Warm parchment tones, optimal for bright daytime reading and sharp serif typography.
-                  </p>
-                  {theme === 'light' && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--accent-gold)] mt-3">
-                      <Check className="w-3.5 h-3.5" /> Active Theme
-                    </span>
-                  )}
-                </button>
-
-                {/* Dark Mode */}
-                <button
-                  type="button"
-                  onClick={() => setTheme('dark')}
-                  className={`p-5 rounded-2xl border text-left transition-all cursor-pointer ${
-                    theme === 'dark'
-                      ? 'border-[var(--accent-gold)] bg-[var(--accent-gold-muted)] ring-2 ring-[var(--accent-gold)] shadow-sm'
-                      : 'border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] hover:border-[var(--border-strong)]'
-                  }`}
-                >
-                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mb-3">
-                    <Moon className="w-5 h-5" />
-                  </div>
-                  <h3 className="font-semibold text-sm text-[var(--text-primary)]">Dark Mode</h3>
-                  <p className="text-[11px] text-[var(--text-muted)] mt-1">
-                    Deep obsidian luxury aesthetic with gold accents, gentle on the eyes in low light.
-                  </p>
-                  {theme === 'dark' && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--accent-gold)] mt-3">
-                      <Check className="w-3.5 h-3.5" /> Active Theme
-                    </span>
-                  )}
-                </button>
-
-                {/* System Default */}
-                <button
-                  type="button"
-                  onClick={() => setTheme('system')}
-                  className={`p-5 rounded-2xl border text-left transition-all cursor-pointer ${
-                    theme === 'system'
-                      ? 'border-[var(--accent-gold)] bg-[var(--accent-gold-muted)] ring-2 ring-[var(--accent-gold)] shadow-sm'
-                      : 'border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] hover:border-[var(--border-strong)]'
-                  }`}
-                >
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center mb-3">
-                    <Monitor className="w-5 h-5" />
-                  </div>
-                  <h3 className="font-semibold text-sm text-[var(--text-primary)]">System Default</h3>
-                  <p className="text-[11px] text-[var(--text-muted)] mt-1">
-                    Automatically synchronize with your operating system’s current dark/light preference.
-                  </p>
-                  {theme === 'system' && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--accent-gold)] mt-3">
-                      <Check className="w-3.5 h-3.5" /> Active ({resolvedTheme})
-                    </span>
-                  )}
-                </button>
-              </div>
-
-              <div className="pt-4 border-t border-[var(--border-subtle)] text-xs text-[var(--text-muted)]">
-                Note: Theme preferences are automatically synchronized across devices when you are logged into your account.
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: LANGUAGE SETTINGS */}
+          {/* TAB 5: LANGUAGE SETTINGS */}
           {activeTab === 'language' && (
             <div className="space-y-6 animate-in fade-in duration-150">
               <div className="border-b border-[var(--border-subtle)] pb-4">
@@ -753,7 +1229,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onNavigate, initialT
                 </div>
               </div>
 
-              {/* RTL Notice if active language is RTL */}
               {isRTL && (
                 <div className="p-3.5 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/30 text-xs flex items-center gap-2.5">
                   <Globe className="w-4 h-4 shrink-0" />

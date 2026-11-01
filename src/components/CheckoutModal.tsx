@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
 import { PaymentSettingsPublic } from '../types';
 import { apiClient } from '../services/apiClient';
+import { resolveBookCover } from '../utils/imageUrl';
 
 interface CheckoutModalProps {
   onSuccess: (orderId: string) => void;
@@ -273,7 +274,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onSuccess }) => {
                   <div key={item.book.id} className="p-3 flex items-center justify-between text-xs">
                     <div className="flex items-center gap-3 min-w-0 pr-2">
                       <img
-                        src={item.book.coverImage}
+                        src={resolveBookCover(item.book.coverImage)}
                         alt={item.book.title}
                         className="w-9 h-12 object-cover rounded shadow-xs shrink-0"
                       />

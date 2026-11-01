@@ -625,15 +625,22 @@ app.get('/api/auth/me', requireAuth, (req: Request, res: Response) => {
 
 app.put('/api/auth/profile', requireAuth, (req: Request, res: Response) => {
   const user = (req as any).user as User;
-  const { name, phone, bio, photoURL, language, theme } = req.body;
+  const { name, phone, bio, photoURL, avatar, language, theme, notifications } = req.body;
 
   const updates: Partial<User> = {};
   if (typeof name === 'string' && name.trim()) updates.name = name.trim();
   if (typeof phone === 'string') updates.phone = phone.trim();
   if (typeof bio === 'string') updates.bio = bio.trim();
-  if (typeof photoURL === 'string') updates.photoURL = photoURL.trim();
+  if (typeof photoURL === 'string') {
+    updates.photoURL = photoURL.trim();
+    updates.avatar = photoURL.trim();
+  } else if (typeof avatar === 'string') {
+    updates.photoURL = avatar.trim();
+    updates.avatar = avatar.trim();
+  }
   if (typeof language === 'string') updates.language = language.trim();
   if (['dark', 'light', 'system'].includes(theme)) updates.theme = theme;
+  if (notifications && typeof notifications === 'object') updates.notifications = notifications;
 
   const updated = db.updateUser(user.id, updates);
   if (!updated) {
@@ -652,10 +659,12 @@ app.put('/api/auth/profile', requireAuth, (req: Request, res: Response) => {
       library: updated.library,
       wishlist: updated.wishlist || [],
       photoURL: updated.photoURL,
+      avatar: updated.avatar || updated.photoURL,
       phone: updated.phone,
       bio: updated.bio,
       language: updated.language,
       theme: updated.theme,
+      notifications: updated.notifications,
       emailVerified: updated.emailVerified,
       createdAt: updated.createdAt,
       updatedAt: updated.updatedAt

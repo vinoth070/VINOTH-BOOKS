@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { BookCard } from '../components/BookCard';
 import { apiClient } from '../services/apiClient';
 import { FALLBACK_BOOKS } from '../data/fallbackData';
+import { resolveBookCover } from '../utils/imageUrl';
 
 interface BookDetailsViewProps {
   bookId: string;
@@ -196,7 +197,7 @@ export const BookDetailsView: React.FC<BookDetailsViewProps> = ({
               }}
             >
               <img
-                src={book.coverImage}
+                src={resolveBookCover(book.coverImage)}
                 alt={book.title}
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover"

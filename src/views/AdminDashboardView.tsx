@@ -13,6 +13,7 @@ import {
 } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../services/apiClient';
+import { resolveBookCover } from '../utils/imageUrl';
 
 interface AdminDashboardViewProps {
   books: Book[];
@@ -875,7 +876,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-3">
                             <img
-                              src={book.coverImage}
+                              src={resolveBookCover(book.coverImage)}
                               alt={book.title}
                               className="w-10 h-14 object-cover rounded shadow-2xs shrink-0 bg-slate-900"
                             />

@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { useI18n } from '../context/I18nContext';
+import { resolveAvatarUrl } from '../utils/imageUrl';
 
 interface NavbarProps {
   currentView: string;
@@ -353,34 +354,39 @@ export const Navbar: React.FC<NavbarProps> = ({
                     : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)]'
                 }`}
               >
-                {isAdmin ? (
-                  <ShieldAlert className="w-3.5 h-3.5 text-[var(--accent-gold)] shrink-0" />
-                ) : user.photoURL ? (
-                  <img src={user.photoURL} alt="" className="w-4 h-4 rounded-full object-cover shrink-0" />
-                ) : (
-                  <UserIcon className="w-3.5 h-3.5 text-[var(--accent-gold)] shrink-0" />
-                )}
+                <img
+                  src={resolveAvatarUrl(user.photoURL, user.avatar, user.name)}
+                  alt=""
+                  className="w-5 h-5 rounded-full object-cover shrink-0 ring-1 ring-[var(--accent-gold)]"
+                />
                 <span className="max-w-[110px] truncate">{user.name.split(' ')[0]}</span>
                 <ChevronDown className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
               </button>
 
               {userDropdownOpen && (
                 <div
-                  className="absolute right-0 mt-2 w-56 bg-[var(--bg-surface)] rounded-xl border border-[var(--border-subtle)] shadow-2xl py-2 z-50 text-xs backdrop-blur-xl animate-in fade-in"
+                  className="absolute right-0 mt-2 w-60 bg-[var(--bg-surface)] rounded-xl border border-[var(--border-subtle)] shadow-2xl py-2 z-50 text-xs backdrop-blur-xl animate-in fade-in"
                   onClick={() => setUserDropdownOpen(false)}
                 >
-                  <div className="px-4 py-2 border-b border-[var(--border-subtle)]">
-                    <p className="font-semibold text-[var(--text-primary)] truncate">{user.name}</p>
-                    <p className="text-[11px] text-[var(--text-muted)] truncate">{user.email}</p>
-                    {isAdmin ? (
-                      <span className="inline-block mt-1 text-[10px] font-bold uppercase tracking-wider bg-[var(--accent-gold-muted)] text-[var(--accent-gold)] px-2 py-0.5 rounded">
-                        Authorized Publisher
-                      </span>
-                    ) : (
-                      <span className="inline-block mt-1 text-[10px] font-semibold text-[var(--text-muted)]">
-                        Reader Account
-                      </span>
-                    )}
+                  <div className="px-4 py-2.5 border-b border-[var(--border-subtle)] flex items-center gap-3">
+                    <img
+                      src={resolveAvatarUrl(user.photoURL, user.avatar, user.name)}
+                      alt=""
+                      className="w-9 h-9 rounded-full object-cover ring-1 ring-[var(--accent-gold)] shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <p className="font-semibold text-[var(--text-primary)] truncate">{user.name}</p>
+                      <p className="text-[11px] text-[var(--text-muted)] truncate">{user.email}</p>
+                      {isAdmin ? (
+                        <span className="inline-block mt-0.5 text-[9px] font-bold uppercase tracking-wider bg-[var(--accent-gold-muted)] text-[var(--accent-gold)] px-2 py-0.5 rounded">
+                          Authorized Publisher
+                        </span>
+                      ) : (
+                        <span className="inline-block mt-0.5 text-[9px] font-semibold text-[var(--text-muted)]">
+                          Reader Account
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {isAdmin && (
@@ -467,13 +473,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           {user ? (
             <div className="p-3.5 bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] rounded-xl flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
-                {user.photoURL ? (
-                  <img src={user.photoURL} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
-                ) : (
-                  <div className="w-9 h-9 rounded-full bg-[var(--accent-gold-muted)] flex items-center justify-center text-[var(--accent-gold)] shrink-0">
-                    <UserIcon className="w-5 h-5" />
-                  </div>
-                )}
+                <img
+                  src={resolveAvatarUrl(user.photoURL, user.avatar, user.name)}
+                  alt=""
+                  className="w-10 h-10 rounded-full object-cover shrink-0 ring-1 ring-[var(--accent-gold)]"
+                />
                 <div className="min-w-0">
                   <p className="font-bold text-xs text-[var(--text-primary)] truncate">{user.name}</p>
                   <p className="text-[11px] text-[var(--text-muted)] truncate">{user.email}</p>

@@ -8,6 +8,7 @@ import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
   sendPasswordResetEmail,
+  updateProfile,
   firebaseSignOut,
   onAuthStateChanged,
   FirebaseUser
@@ -83,6 +84,8 @@ interface AuthContextType {
   forgotPassword: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  updateUserProfile: (updates: Partial<User>) => Promise<{ success: boolean; user?: User; error?: string }>;
+  removeProfilePicture: () => Promise<{ success: boolean; error?: string }>;
   wishlist: string[];
   toggleWishlist: (bookId: string) => Promise<void>;
   isWishlisted: (bookId: string) => boolean;
@@ -91,7 +94,14 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem('vb_cached_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('vb_token'));
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const [wishlist, setWishlist] = useState<string[]>(() => {
@@ -423,6 +433,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.warn('Firebase signout note:', err);
     }
     localStorage.removeItem('vb_token');
+    localStorage.removeItem('vb_cached_user');
     setToken(null);
     setUser(null);
     setUnverifiedEmail(null);
@@ -433,6 +444,58 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (token) {
       await fetchCurrentUser(token);
     }
+  };
+
+  // Update profile attributes with immediate local state & persistent storage sync
+  const updateUserProfile = async (updates: Partial<User>): Promise<{ success: boolean; user?: User; error?: string }> => {
+    if (!user) return { success: false, error: 'Not authenticated' };
+
+    const mergedUser: User = {
+      ...user,
+      ...updates,
+      photoURL: updates.photoURL !== undefined ? updates.photoURL : (updates.avatar !== undefined ? updates.avatar : user.photoURL),
+      avatar: updates.avatar !== undefined ? updates.avatar : (updates.photoURL !== undefined ? updates.photoURL : user.avatar),
+      updatedAt: new Date().toISOString()
+    };
+
+    setUser(mergedUser);
+    try {
+      localStorage.setItem('vb_cached_user', JSON.stringify(mergedUser));
+    } catch {}
+
+    // 1. Sync with Firebase Auth user profile
+    try {
+      if (auth.currentUser && (updates.photoURL !== undefined || updates.avatar !== undefined || updates.name !== undefined)) {
+        await updateProfile(auth.currentUser, {
+          displayName: updates.name ?? auth.currentUser.displayName,
+          photoURL: (updates.photoURL ?? updates.avatar ?? auth.currentUser.photoURL) || ''
+        });
+      }
+    } catch (fbErr) {
+      console.warn('Firebase Auth profile update note:', fbErr);
+    }
+
+    // 2. Sync with Backend API if connected
+    let serverUpdated = false;
+    try {
+      if (token) {
+        const res = await apiClient.put<{ user: User }>('/api/auth/profile', updates);
+        if (res?.user) {
+          setUser(res.user);
+          localStorage.setItem('vb_cached_user', JSON.stringify(res.user));
+          serverUpdated = true;
+        }
+      }
+    } catch (apiErr: any) {
+      console.warn('Backend profile update note:', apiErr.message);
+    }
+
+    return { success: true, user: mergedUser };
+  };
+
+  // Remove profile picture
+  const removeProfilePicture = async (): Promise<{ success: boolean; error?: string }> => {
+    return updateUserProfile({ photoURL: '', avatar: '' });
   };
 
   // Toggle wishlist
@@ -480,6 +543,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         forgotPassword,
         logout,
         refreshUser,
+        updateUserProfile,
+        removeProfilePicture,
         wishlist,
         toggleWishlist,
         isWishlisted
