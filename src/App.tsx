@@ -23,6 +23,8 @@ import { SettingsView } from './views/SettingsView';
 import { LegalView } from './views/LegalView';
 import { AdminDashboardView } from './views/AdminDashboardView';
 import { Lock } from 'lucide-react';
+import { apiClient, getApiUrl } from './services/apiClient';
+import { FALLBACK_BOOKS, FALLBACK_CATEGORIES } from './data/fallbackData';
 
 function MainApp() {
   const { user, token, logout, isAdmin } = useAuth();
@@ -30,9 +32,9 @@ function MainApp() {
 
   const [currentView, setCurrentView] = useState<string>('home');
   const [viewParams, setViewParams] = useState<any>({});
-  const [books, setBooks] = useState<Book[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [books, setBooks] = useState<Book[]>(FALLBACK_BOOKS);
+  const [categories, setCategories] = useState<Category[]>(FALLBACK_CATEGORIES);
+  const [loading, setLoading] = useState(false);
 
   // Modals
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -43,23 +45,26 @@ function MainApp() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-      const [resBooks, resCats] = await Promise.all([
-        fetch('/api/books', { headers }),
-        fetch('/api/categories')
+      const [resBooks, resCats] = await Promise.allSettled([
+        apiClient.get<{ books: Book[] }>('/api/books'),
+        apiClient.get<{ categories: Category[] }>('/api/categories')
       ]);
 
-      if (resBooks.ok) {
-        const data = await resBooks.json();
-        setBooks(data.books || []);
+      if (resBooks.status === 'fulfilled' && Array.isArray(resBooks.value?.books) && resBooks.value.books.length > 0) {
+        setBooks(resBooks.value.books);
+      } else {
+        setBooks(FALLBACK_BOOKS);
       }
 
-      if (resCats.ok) {
-        const data = await resCats.json();
-        setCategories(data.categories || []);
+      if (resCats.status === 'fulfilled' && Array.isArray(resCats.value?.categories) && resCats.value.categories.length > 0) {
+        setCategories(resCats.value.categories);
+      } else {
+        setCategories(FALLBACK_CATEGORIES);
       }
     } catch (err) {
-      console.error('Failed to load initial data:', err);
+      console.warn('Fallback to bundled catalog:', err);
+      setBooks(FALLBACK_BOOKS);
+      setCategories(FALLBACK_CATEGORIES);
     } finally {
       setLoading(false);
     }
@@ -125,15 +130,56 @@ function MainApp() {
       return;
     }
     try {
-      const res = await fetch(`/api/library/download/${book.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        alert(err.error || 'Download failed');
+      const res = await apiClient.rawFetch(`/api/library/download/${book.id}`);
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${book.title.replace(/[^a-zA-Z0-9_-]/g, '_')}_VINOTH_BOOKS.txt`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
         return;
       }
-      const blob = await res.blob();
+    } catch (fetchErr) {
+      console.warn('Backend download failed, generating client download:', fetchErr);
+    }
+
+    // Client-side download fallback for offline / GitHub Pages mode
+    try {
+      const content = `VINOTH BOOKS — DIGITAL EDITION
+=============================================
+Title: ${book.title}
+Subtitle: ${book.subtitle}
+Author: ${book.author}
+Category: ${book.category}
+ISBN: ${book.isbn || 'N/A'}
+Publication Date: ${book.publicationDate}
+Language: ${book.language}
+
+DESCRIPTION
+-----------
+${book.fullDescription}
+
+KEY LEARNINGS
+-------------
+${(book.keyLearnings || []).map((k, i) => `${i + 1}. ${k}`).join('\n')}
+
+TABLE OF CONTENTS
+-----------------
+${(book.tableOfContents || []).map((c, i) => `${i + 1}. ${c}`).join('\n')}
+
+SAMPLE CHAPTERS
+---------------
+${(book.sampleContent || []).map(sc => `\n### ${sc.chapterTitle}\n\n${sc.content}\n`).join('\n')}
+
+=============================================
+Purchased through VINOTH BOOKS Official Marketplace
+https://vinoth070.github.io/VINOTH-BOOKS/
+`;
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -143,7 +189,7 @@ function MainApp() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch {
-      alert('Network error downloading file');
+      alert('Unable to generate download file. Please try again.');
     }
   };
 

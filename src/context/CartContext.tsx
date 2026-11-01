@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Book, CartItem } from '../types';
+import { apiClient } from '../services/apiClient';
 
 interface CartContextType {
   items: CartItem[];
@@ -84,17 +85,15 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     try {
-      const res = await fetch('/api/coupons/apply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: trimmed, subtotal })
+      const data = await apiClient.post<{ valid: boolean; code: string; discount: number; message?: string; error?: string }>('/api/coupons/apply', {
+        code: trimmed,
+        subtotal
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.valid) {
+      if (!data?.valid) {
         return {
           success: false,
-          message: data.error || 'Invalid or expired coupon code'
+          message: data?.error || 'Invalid or expired coupon code'
         };
       }
 

@@ -7,6 +7,7 @@ import { useAuth, evaluatePasswordRules, isPasswordStrong } from '../context/Aut
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { useI18n } from '../context/I18nContext';
 import { db, doc, updateDoc } from '../firebase';
+import { apiClient } from '../services/apiClient';
 
 interface SettingsViewProps {
   onNavigate: (view: string) => void;
@@ -72,25 +73,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onNavigate, initialT
 
     try {
       // 1. Sync with backend database
-      const res = await fetch('/api/auth/profile', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
+      try {
+        await apiClient.put('/api/auth/profile', {
           name: displayName.trim(),
           phone: phone.trim(),
           bio: bio.trim(),
           photoURL: photoURL.trim(),
           language,
           theme
-        })
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to update profile');
+        });
+      } catch (apiErr: any) {
+        console.warn('Backend profile update note:', apiErr.message);
       }
 
       // 2. Sync with Cloud Firestore
@@ -137,19 +130,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onNavigate, initialT
     setPasswordMsg(null);
 
     try {
-      const res = await fetch('/api/auth/change-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ currentPassword, newPassword })
+      await apiClient.post('/api/auth/change-password', {
+        currentPassword,
+        newPassword
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to update password');
-      }
 
       setPasswordMsg({ type: 'success', text: 'Your password was changed successfully!' });
       setCurrentPassword('');
@@ -167,20 +151,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onNavigate, initialT
     if (!token) return;
     setDeleteLoading(true);
     try {
-      const res = await fetch('/api/auth/delete-account', {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        alert(data.error || 'Could not delete account');
-        setDeleteLoading(false);
-        return;
-      }
+      await apiClient.delete('/api/auth/delete-account');
       await logout();
       onNavigate('home');
-    } catch {
-      alert('Network error deleting account');
+    } catch (err: any) {
+      alert(err.message || 'Error deleting account');
       setDeleteLoading(false);
     }
   };

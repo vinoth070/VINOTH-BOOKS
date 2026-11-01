@@ -1,5 +1,6 @@
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
+import cors from 'cors';
 import path from 'path';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
@@ -11,6 +12,46 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 const APP_SECRET = process.env.APP_SECRET || 'vinoth-books-super-secure-key-2026';
+
+// CORS Configuration for Production & Local Development
+const allowedOrigins = [
+  'https://vinoth070.github.io',
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5173',
+  process.env.APP_URL,
+  process.env.FRONTEND_URL
+].filter(Boolean) as string[];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl, server-to-server)
+    if (!origin) return callback(null, true);
+    if (
+      allowedOrigins.includes(origin) ||
+      origin.endsWith('.github.io') ||
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1')
+    ) {
+      return callback(null, true);
+    }
+    return callback(null, true); // Permissive in dev, credentials allowed
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+}));
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'VINOTH BOOKS API',
+    timestamp: new Date().toISOString(),
+    corsAllowed: true
+  });
+});
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

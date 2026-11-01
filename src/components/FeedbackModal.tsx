@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, MessageSquare, Send, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { apiClient } from '../services/apiClient';
 
 interface FeedbackModalProps {
   isOpen: boolean;
@@ -26,20 +27,22 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
     setLoading(true);
 
     try {
-      const res = await fetch('/api/feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, subject, category, message })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to submit feedback');
-      }
+      await apiClient.post('/api/feedback', { name, email, subject, category, message });
       setSuccess(true);
       setMessage('');
       setSubject('');
     } catch (err: any) {
-      setError(err.message || 'Error submitting feedback');
+      // In offline/static mode, store message locally
+      try {
+        const stored = JSON.parse(localStorage.getItem('vb_pending_feedback') || '[]');
+        stored.push({ name, email, subject, category, message, createdAt: new Date().toISOString() });
+        localStorage.setItem('vb_pending_feedback', JSON.stringify(stored));
+        setSuccess(true);
+        setMessage('');
+        setSubject('');
+      } catch {
+        setError(err.message || 'Error submitting feedback. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

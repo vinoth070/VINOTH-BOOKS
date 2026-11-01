@@ -1,20 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, FileText, RefreshCw, Truck, Mail, Clock } from 'lucide-react';
 import { LegalPages } from '../types';
+import { apiClient } from '../services/apiClient';
 
 interface LegalViewProps {
   initialTab?: 'privacy' | 'terms' | 'refund' | 'delivery' | 'contact';
 }
 
+const DEFAULT_LEGAL: LegalPages = {
+  privacyPolicy: "At VINOTH BOOKS, your personal privacy and intellectual data autonomy are fundamental principles. We never sell, rent, or monetize your personal reading history, purchases, or account information. Payment transactions are processed directly via PCI-DSS compliant payment gateways with bank-grade encryption.",
+  termsConditions: "By accessing VINOTH BOOKS or acquiring digital content through our marketplace, you receive a personal, perpetual, non-exclusive license to download, read, and maintain copies of purchased eBooks for your own personal library. Redistribution or unauthorized resale without express written permission from Vinoth is prohibited.",
+  refundPolicy: "Due to the non-tangible, irrevocable nature of digital downloads, sales of eBooks on VINOTH BOOKS are generally final. However, if you experience technical issues accessing your purchased file or made an accidental duplicate purchase, our support desk will issue an immediate refund upon verification within 7 business days.",
+  deliveryPolicy: "All eBooks and digital publications on VINOTH BOOKS are delivered instantly upon successful completion of payment. You will receive immediate access in 'My Library' with online reader capabilities and direct file download options.",
+  contactSupport: {
+    email: "kalivinoselvikk@gmail.com",
+    responseHours: "Monday to Saturday, 9:00 AM – 7:00 PM IST",
+    supportNote: "Vinoth directly reviews reader inquiries and feedback."
+  }
+};
+
 export const LegalView: React.FC<LegalViewProps> = ({ initialTab = 'terms' }) => {
   const [activeTab, setActiveTab] = useState<'privacy' | 'terms' | 'refund' | 'delivery' | 'contact'>(initialTab);
-  const [legal, setLegal] = useState<LegalPages | null>(null);
+  const [legal, setLegal] = useState<LegalPages>(DEFAULT_LEGAL);
 
   useEffect(() => {
-    fetch('/api/legal')
-      .then(res => res.json())
-      .then(data => setLegal(data.legal))
-      .catch(err => console.error('Failed to load legal pages:', err));
+    apiClient.get<{ legal: LegalPages }>('/api/legal')
+      .then(data => {
+        if (data?.legal) setLegal(data.legal);
+      })
+      .catch(() => {
+        // Keep DEFAULT_LEGAL
+      });
   }, []);
 
   return (

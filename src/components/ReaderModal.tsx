@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { X, BookOpen, ChevronLeft, ChevronRight, Type, Sun, Moon, Coffee, ShieldCheck } from 'lucide-react';
 import { Book } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { apiClient } from '../services/apiClient';
+import { FALLBACK_BOOKS } from '../data/fallbackData';
 
 interface ReaderModalProps {
   bookId: string;
@@ -22,17 +24,20 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({ bookId, onClose }) => 
     const fetchReaderContent = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`/api/library/read/${bookId}`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setError(data.error || 'Failed to open digital reader');
-          return;
+        const data = await apiClient.get<{ book: Book }>(`/api/library/read/${bookId}`);
+        if (data?.book) {
+          setBook(data.book);
+        } else {
+          throw new Error('Book not found');
         }
-        setBook(data.book);
       } catch (err: any) {
-        setError(err.message || 'Error loading reader');
+        // Fallback to bundled book sample content
+        const fallback = FALLBACK_BOOKS.find(b => b.id === bookId);
+        if (fallback) {
+          setBook(fallback);
+        } else {
+          setError(err.message || 'Error loading reader content');
+        }
       } finally {
         setLoading(false);
       }

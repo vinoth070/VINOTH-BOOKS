@@ -3,3 +3,12 @@ import App from './App.tsx';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(<App />);
+
+// Register Service Worker for PWA compliance
+if ('serviceWorker' in navigator && (import.meta.env.PROD || window.location.hostname.includes('github.io'))) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch((err) => {
+      console.warn('Service worker registration skipped:', err);
+    });
+  });
+}

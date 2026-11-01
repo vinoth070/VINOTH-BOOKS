@@ -12,6 +12,7 @@ import {
   PaymentSettingsPublic, WebsiteSettings, AnalyticsSummary, ActivityLog
 } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { apiClient } from '../services/apiClient';
 
 interface AdminDashboardViewProps {
   books: Book[];
@@ -149,56 +150,33 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     if (!token) return;
     try {
       setLoading(true);
-      const headers = { Authorization: `Bearer ${token}` };
 
       const [resAnalytics, resOrders, resCustomers, resCoupons, resReviews, resFeedback, resPayment, resWeb, resLogs] =
-        await Promise.all([
-          fetch('/api/admin/analytics', { headers }),
-          fetch('/api/orders', { headers }),
-          fetch('/api/admin/customers', { headers }),
-          fetch('/api/admin/coupons', { headers }),
-          fetch('/api/admin/reviews', { headers }),
-          fetch('/api/admin/feedback', { headers }),
-          fetch('/api/admin/payment-settings', { headers }),
-          fetch('/api/settings'),
-          fetch('/api/admin/activity-logs', { headers })
+        await Promise.allSettled([
+          apiClient.get<AnalyticsSummary>('/api/admin/analytics'),
+          apiClient.get<{ orders: Order[] }>('/api/orders'),
+          apiClient.get<{ customers: any[] }>('/api/admin/customers'),
+          apiClient.get<{ coupons: Coupon[] }>('/api/admin/coupons'),
+          apiClient.get<{ reviews: Review[] }>('/api/admin/reviews'),
+          apiClient.get<{ feedbacks: CustomerFeedback[] }>('/api/admin/feedback'),
+          apiClient.get<PaymentSettingsPublic>('/api/admin/payment-settings'),
+          apiClient.get<{ settings: WebsiteSettings }>('/api/settings'),
+          apiClient.get<{ logs: ActivityLog[] }>('/api/admin/activity-logs')
         ]);
 
-      if (resAnalytics.ok) setAnalytics(await resAnalytics.json());
-      if (resOrders.ok) {
-        const data = await resOrders.json();
-        setOrders(data.orders || []);
+      if (resAnalytics.status === 'fulfilled' && resAnalytics.value) setAnalytics(resAnalytics.value);
+      if (resOrders.status === 'fulfilled' && resOrders.value?.orders) setOrders(resOrders.value.orders);
+      if (resCustomers.status === 'fulfilled' && resCustomers.value?.customers) setCustomers(resCustomers.value.customers);
+      if (resCoupons.status === 'fulfilled' && resCoupons.value?.coupons) setCoupons(resCoupons.value.coupons);
+      if (resReviews.status === 'fulfilled' && resReviews.value?.reviews) setReviews(resReviews.value.reviews);
+      if (resFeedback.status === 'fulfilled' && resFeedback.value?.feedbacks) setFeedbacks(resFeedback.value.feedbacks);
+      if (resPayment.status === 'fulfilled' && resPayment.value) {
+        setPaymentConfig(resPayment.value);
+        setTestKeyIdInput(resPayment.value.testKeyId || '');
+        setLiveKeyIdInput(resPayment.value.liveKeyId || '');
       }
-      if (resCustomers.ok) {
-        const data = await resCustomers.json();
-        setCustomers(data.customers || []);
-      }
-      if (resCoupons.ok) {
-        const data = await resCoupons.json();
-        setCoupons(data.coupons || []);
-      }
-      if (resReviews.ok) {
-        const data = await resReviews.json();
-        setReviews(data.reviews || []);
-      }
-      if (resFeedback.ok) {
-        const data = await resFeedback.json();
-        setFeedbacks(data.feedbacks || []);
-      }
-      if (resPayment.ok) {
-        const data = await resPayment.json();
-        setPaymentConfig(data);
-        setTestKeyIdInput(data.testKeyId || '');
-        setLiveKeyIdInput(data.liveKeyId || '');
-      }
-      if (resWeb.ok) {
-        const data = await resWeb.json();
-        setWebSettings(data.settings);
-      }
-      if (resLogs && resLogs.ok) {
-        const data = await resLogs.json();
-        setActivityLogs(data.logs || []);
-      }
+      if (resWeb.status === 'fulfilled' && resWeb.value?.settings) setWebSettings(resWeb.value.settings);
+      if (resLogs.status === 'fulfilled' && resLogs.value?.logs) setActivityLogs(resLogs.value.logs);
     } catch (err) {
       console.error('Failed to load admin dataset:', err);
     } finally {
@@ -229,20 +207,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       };
 
       const url = editingBookId ? `/api/books/${editingBookId}` : '/api/books';
-      const method = editingBookId ? 'PUT' : 'POST';
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to save book');
+      if (editingBookId) {
+        await apiClient.put(url, payload);
+      } else {
+        await apiClient.post(url, payload);
       }
 
       showNotification('success', editingBookId ? 'Book updated successfully!' : 'eBook published to live store!');
@@ -295,22 +263,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     if (!bookToDelete) return;
     try {
       setLoading(true);
-      const res = await fetch(`/api/books/${bookToDelete.id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        showNotification('success', `"${bookToDelete.title}" removed permanently from catalog.`);
-        setIsDeleteModalOpen(false);
-        setBookToDelete(null);
-        await onRefreshData();
-        await fetchAdminData();
-      } else {
-        const err = await res.json();
-        showNotification('error', err.error || 'Failed to delete book');
-      }
-    } catch {
-      showNotification('error', 'Failed to delete book');
+      await apiClient.delete(`/api/books/${bookToDelete.id}`);
+      showNotification('success', `"${bookToDelete.title}" removed permanently from catalog.`);
+      setIsDeleteModalOpen(false);
+      setBookToDelete(null);
+      await onRefreshData();
+      await fetchAdminData();
+    } catch (err: any) {
+      showNotification('error', err.message || 'Failed to delete book');
     } finally {
       setLoading(false);
     }
@@ -361,56 +321,33 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
   const handleUpdateReviewStatus = async (reviewId: string, status: 'approved' | 'hidden') => {
     try {
-      const res = await fetch(`/api/admin/reviews/${reviewId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ status })
-      });
-      if (res.ok) {
-        showNotification('success', `Review status set to ${status}`);
-        await fetchAdminData();
-      }
-    } catch {
-      showNotification('error', 'Failed to update review status');
+      await apiClient.patch(`/api/admin/reviews/${reviewId}`, { status });
+      showNotification('success', `Review status set to ${status}`);
+      await fetchAdminData();
+    } catch (err: any) {
+      showNotification('error', err.message || 'Failed to update review status');
     }
   };
 
   const handleDeleteReview = async (reviewId: string) => {
     try {
-      const res = await fetch(`/api/admin/reviews/${reviewId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        showNotification('success', 'Review removed');
-        await fetchAdminData();
-      }
-    } catch {
-      showNotification('error', 'Failed to delete review');
+      await apiClient.delete(`/api/admin/reviews/${reviewId}`);
+      showNotification('success', 'Review removed');
+      await fetchAdminData();
+    } catch (err: any) {
+      showNotification('error', err.message || 'Failed to delete review');
     }
   };
 
   const handleToggleStatus = async (id: string, currentStatus: 'published' | 'draft') => {
     const nextStatus = currentStatus === 'published' ? 'draft' : 'published';
     try {
-      const res = await fetch(`/api/books/${id}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: nextStatus })
-      });
-      if (res.ok) {
-        showNotification('success', `Book status set to ${nextStatus}`);
-        await onRefreshData();
-        await fetchAdminData();
-      }
-    } catch {
-      showNotification('error', 'Failed to toggle status');
+      await apiClient.patch(`/api/books/${id}/status`, { status: nextStatus });
+      showNotification('success', `Book status set to ${nextStatus}`);
+      await onRefreshData();
+      await fetchAdminData();
+    } catch (err: any) {
+      showNotification('error', err.message || 'Failed to update status');
     }
   };
 
@@ -419,62 +356,39 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     e.preventDefault();
     if (!newCatName.trim()) return;
     try {
-      const res = await fetch('/api/categories', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ name: newCatName.trim(), description: newCatDesc.trim() })
-      });
-      if (res.ok) {
-        showNotification('success', 'Category created successfully');
-        setNewCatName('');
-        setNewCatDesc('');
-        await onRefreshData();
-        await fetchAdminData();
-      }
-    } catch {
-      showNotification('error', 'Failed to add category');
+      await apiClient.post('/api/categories', { name: newCatName.trim(), description: newCatDesc.trim() });
+      showNotification('success', 'Category created successfully');
+      setNewCatName('');
+      setNewCatDesc('');
+      await onRefreshData();
+      await fetchAdminData();
+    } catch (err: any) {
+      showNotification('error', err.message || 'Failed to add category');
     }
   };
 
   const handleSaveEditCategory = async (id: string) => {
     if (!editCatName.trim()) return;
     try {
-      const res = await fetch(`/api/categories/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ name: editCatName.trim(), description: editCatDesc.trim() })
-      });
-      if (res.ok) {
-        showNotification('success', 'Category updated');
-        setEditingCatId(null);
-        await onRefreshData();
-        await fetchAdminData();
-      }
-    } catch {
-      showNotification('error', 'Failed to update category');
+      await apiClient.put(`/api/categories/${id}`, { name: editCatName.trim(), description: editCatDesc.trim() });
+      showNotification('success', 'Category updated');
+      setEditingCatId(null);
+      await onRefreshData();
+      await fetchAdminData();
+    } catch (err: any) {
+      showNotification('error', err.message || 'Failed to update category');
     }
   };
 
   const handleDeleteCategory = async (id: string, name: string) => {
     if (!window.confirm(`Delete category "${name}"?`)) return;
     try {
-      const res = await fetch(`/api/categories/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        showNotification('success', 'Category deleted');
-        await onRefreshData();
-        await fetchAdminData();
-      }
-    } catch {
-      showNotification('error', 'Failed to delete category');
+      await apiClient.delete(`/api/categories/${id}`);
+      showNotification('success', 'Category deleted');
+      await onRefreshData();
+      await fetchAdminData();
+    } catch (err: any) {
+      showNotification('error', err.message || 'Failed to delete category');
     }
   };
 
@@ -482,61 +396,34 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const handleSendReply = async (feedbackId: string) => {
     if (!replyMessage.trim()) return;
     try {
-      const res = await fetch(`/api/admin/feedback/${feedbackId}/reply`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ message: replyMessage.trim() })
-      });
-      if (res.ok) {
-        showNotification('success', 'Reply sent to customer ticket');
-        setReplyMessage('');
-        await fetchAdminData();
-      }
-    } catch {
-      showNotification('error', 'Failed to send reply');
+      await apiClient.post(`/api/admin/feedback/${feedbackId}/reply`, { message: replyMessage.trim() });
+      showNotification('success', 'Reply sent to customer ticket');
+      setReplyMessage('');
+      await fetchAdminData();
+    } catch (err: any) {
+      showNotification('error', err.message || 'Failed to send reply');
     }
   };
 
   const handleUpdateReply = async (feedbackId: string, replyId: string) => {
     if (!editReplyText.trim()) return;
     try {
-      const res = await fetch(`/api/admin/feedback/${feedbackId}/reply/${replyId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ message: editReplyText.trim() })
-      });
-      if (res.ok) {
-        showNotification('success', 'Reply updated');
-        setEditingReplyId(null);
-        await fetchAdminData();
-      }
-    } catch {
-      showNotification('error', 'Failed to update reply');
+      await apiClient.put(`/api/admin/feedback/${feedbackId}/reply/${replyId}`, { message: editReplyText.trim() });
+      showNotification('success', 'Reply updated');
+      setEditingReplyId(null);
+      await fetchAdminData();
+    } catch (err: any) {
+      showNotification('error', err.message || 'Failed to update reply');
     }
   };
 
   const handleUpdateFeedbackStatus = async (feedbackId: string, status: any) => {
     try {
-      const res = await fetch(`/api/admin/feedback/${feedbackId}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ status })
-      });
-      if (res.ok) {
-        showNotification('success', `Status updated to ${status}`);
-        await fetchAdminData();
-      }
-    } catch {
-      showNotification('error', 'Failed to update status');
+      await apiClient.patch(`/api/admin/feedback/${feedbackId}/status`, { status });
+      showNotification('success', `Status updated to ${status}`);
+      await fetchAdminData();
+    } catch (err: any) {
+      showNotification('error', err.message || 'Failed to update status');
     }
   };
 
@@ -553,20 +440,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       if (liveSecretInput.trim()) payload.liveKeySecret = liveSecretInput.trim();
       if (webhookSecretInput.trim()) payload.webhookSecret = webhookSecretInput.trim();
 
-      const res = await fetch('/api/admin/payment-settings', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to update payment settings');
-      }
-
-      showNotification('success', data.message || 'Payment settings updated');
+      const data = await apiClient.put<{ message?: string }>('/api/admin/payment-settings', payload);
+      showNotification('success', data?.message || 'Payment settings updated');
       setTestSecretInput('');
       setLiveSecretInput('');
       setWebhookSecretInput('');
@@ -574,7 +449,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       setLiveConfirmWord('');
       await fetchAdminData();
     } catch (err: any) {
-      showNotification('error', err.message);
+      showNotification('error', err.message || 'Failed to update payment settings');
     }
   };
 
@@ -582,24 +457,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     try {
       setIsValidatingLive(true);
       setLiveValidationResult(null);
-      const res = await fetch('/api/admin/payment-settings/validate-live', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          liveKeyId: liveKeyIdInput.trim(),
-          liveKeySecret: liveSecretInput.trim()
-        })
+      const data = await apiClient.post<{ success: boolean; message: string; error?: string }>('/api/admin/payment-settings/validate-live', {
+        liveKeyId: liveKeyIdInput.trim(),
+        liveKeySecret: liveSecretInput.trim()
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      if (data?.success) {
         setLiveValidationResult({ success: true, message: data.message });
         showNotification('success', data.message);
       } else {
-        setLiveValidationResult({ success: false, message: data.error || 'Live credentials validation failed' });
-        showNotification('error', data.error || 'Live credentials validation failed');
+        setLiveValidationResult({ success: false, message: data?.error || 'Live credentials validation failed' });
+        showNotification('error', data?.error || 'Live credentials validation failed');
       }
     } catch (err: any) {
       setLiveValidationResult({ success: false, message: err.message || 'Validation failed' });
@@ -614,19 +481,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     e.preventDefault();
     if (!webSettings) return;
     try {
-      const res = await fetch('/api/admin/settings', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(webSettings)
-      });
-      if (res.ok) {
-        showNotification('success', 'Website settings saved');
-      }
-    } catch {
-      showNotification('error', 'Failed to save settings');
+      await apiClient.put('/api/admin/settings', webSettings);
+      showNotification('success', 'Website settings saved');
+    } catch (err: any) {
+      showNotification('error', err.message || 'Failed to save settings');
     }
   };
 
@@ -635,26 +493,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     e.preventDefault();
     if (!couponCode.trim()) return;
     try {
-      const res = await fetch('/api/admin/coupons', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          code: couponCode.trim(),
-          discountType: couponType,
-          discountValue: Number(couponVal),
-          minPurchase: Number(couponMin)
-        })
+      await apiClient.post('/api/admin/coupons', {
+        code: couponCode.trim(),
+        discountType: couponType,
+        discountValue: Number(couponVal),
+        minPurchase: Number(couponMin)
       });
-      if (res.ok) {
-        showNotification('success', 'Coupon code generated');
-        setCouponCode('');
-        await fetchAdminData();
-      }
-    } catch {
-      showNotification('error', 'Failed to create coupon');
+      showNotification('success', 'Coupon code generated');
+      setCouponCode('');
+      await fetchAdminData();
+    } catch (err: any) {
+      showNotification('error', err.message || 'Failed to create coupon');
     }
   };
 

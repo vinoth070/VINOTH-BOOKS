@@ -1,0 +1,20 @@
+{
+  "name": "VINOTH BOOKS — Independent Digital Publishing",
+  "short_name": "VINOTH BOOKS",
+  "description": "Official independent digital publishing house and direct-to-reader eBook marketplace founded by Vinoth.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0A0D14",
+  "theme_color": "#0A0D14",
+  "categories": ["books", "education", "business", "lifestyle"],
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

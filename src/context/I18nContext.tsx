@@ -3,6 +3,7 @@ import { SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE, getLanguageByCode, Language } fr
 import { getTranslation } from '../i18n/translations';
 import { useAuth } from './AuthContext';
 import { db, doc, updateDoc } from '../firebase';
+import { apiClient } from '../services/apiClient';
 
 interface I18nContextType {
   language: string;
@@ -66,14 +67,7 @@ export const I18nProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         await Promise.allSettled([
           updateDoc(doc(db, 'users', user.id), { language: newLangCode }),
-          fetch('/api/auth/profile', {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${localStorage.getItem('vb_token') || ''}`
-            },
-            body: JSON.stringify({ language: newLangCode })
-          })
+          apiClient.put('/api/auth/profile', { language: newLangCode })
         ]);
       } catch (err) {
         console.warn('Could not persist language to user profile:', err);

@@ -3,6 +3,7 @@ import { ShoppingBag, CheckCircle2, Clock, ShieldCheck, ArrowRight, FileText } f
 import { Order } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
+import { apiClient } from '../services/apiClient';
 
 export const OrdersView: React.FC<{ onNavigate: (view: string) => void }> = ({ onNavigate }) => {
   const { token, user } = useAuth();
@@ -14,15 +15,20 @@ export const OrdersView: React.FC<{ onNavigate: (view: string) => void }> = ({ o
     const fetchOrders = async () => {
       try {
         setLoading(true);
-        const res = await fetch('/api/orders', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setOrders(data.orders || []);
+        const data = await apiClient.get<{ orders: Order[] }>('/api/orders');
+        if (data && Array.isArray(data.orders)) {
+          setOrders(data.orders);
+        } else {
+          setOrders([]);
         }
       } catch (err) {
-        console.error('Failed to load orders:', err);
+        // Fallback to local cached orders
+        try {
+          const cached = JSON.parse(localStorage.getItem('vb_client_orders') || '[]');
+          setOrders(cached);
+        } catch {
+          setOrders([]);
+        }
       } finally {
         setLoading(false);
       }

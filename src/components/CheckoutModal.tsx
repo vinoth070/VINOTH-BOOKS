@@ -8,6 +8,7 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
 import { PaymentSettingsPublic } from '../types';
+import { apiClient } from '../services/apiClient';
 
 interface CheckoutModalProps {
   onSuccess: (orderId: string) => void;
@@ -31,12 +32,24 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onSuccess }) => {
       setErrorMsg(null);
       setNoticeMsg(null);
       setStep('review');
-      fetch('/api/payment/config')
-        .then(res => res.json())
+      apiClient.get<{ config: PaymentSettingsPublic }>('/api/payment/config')
         .then(data => {
-          if (data.config) setPaymentConfig(data.config);
+          if (data?.config) setPaymentConfig(data.config);
         })
-        .catch(() => {});
+        .catch(() => {
+          // Default test mode config if server is in static mode
+          setPaymentConfig({
+            mode: 'test',
+            activeKeyId: '',
+            isTestConfigured: false,
+            isLiveConfigured: false,
+            hasTestSecret: false,
+            hasLiveSecret: false,
+            currency: 'INR',
+            isLiveConfirmed: false,
+            updatedAt: new Date().toISOString()
+          });
+        });
     }
   }, [isCheckoutOpen]);
 
@@ -53,22 +66,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onSuccess }) => {
       setNoticeMsg(null);
 
       // 1. Backend payment order creation
-      const res = await fetch('/api/payment/create-order', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          bookIds: items.map(i => i.book.id),
-          couponCode: appliedCoupon?.code
-        })
+      const orderData = await apiClient.post<{
+        orderId: string;
+        isFree?: boolean;
+        amount: number;
+        currency: string;
+        keyId?: string;
+        razorpayOrderId?: string;
+        customer?: { name: string; email: string };
+      }>('/api/payment/create-order', {
+        bookIds: items.map(i => i.book.id),
+        couponCode: appliedCoupon?.code
       });
-
-      const orderData = await res.json();
-      if (!res.ok) {
-        throw new Error(orderData.error || 'Failed to initialize payment');
-      }
 
       // If free order, it's completed instantly
       if (orderData.isFree) {
@@ -83,35 +92,20 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onSuccess }) => {
       // Handle Simulated Failure outcome test
       if (simulatedOutcome === 'failed') {
         await new Promise(r => setTimeout(r, 900));
-        const failRes = await fetch('/api/payment/simulate-outcome', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            orderId: orderData.orderId,
-            outcome: 'failed'
-          })
+        const failData = await apiClient.post<{ message?: string }>('/api/payment/simulate-outcome', {
+          orderId: orderData.orderId,
+          outcome: 'failed'
         });
-        const failData = await failRes.json();
-        setErrorMsg(failData.message || 'Payment simulation: Transaction declined by bank.');
+        setErrorMsg(failData?.message || 'Payment simulation: Transaction declined by bank.');
         return;
       }
 
       // Handle Simulated Cancellation outcome test
       if (simulatedOutcome === 'cancelled') {
         await new Promise(r => setTimeout(r, 600));
-        await fetch('/api/payment/simulate-outcome', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            orderId: orderData.orderId,
-            outcome: 'cancelled'
-          })
+        await apiClient.post('/api/payment/simulate-outcome', {
+          orderId: orderData.orderId,
+          outcome: 'cancelled'
         });
         setNoticeMsg('Payment simulation: Checkout was cancelled. Your cart items are preserved.');
         return;
@@ -134,29 +128,21 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onSuccess }) => {
             color: '#B38A38'
           },
           handler: async (response: any) => {
-            const verifyRes = await fetch('/api/payment/verify', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`
-              },
-              body: JSON.stringify({
+            try {
+              await apiClient.post('/api/payment/verify', {
                 orderId: orderData.orderId,
                 razorpayPaymentId: response.razorpay_payment_id,
                 razorpayOrderId: response.razorpay_order_id,
                 razorpaySignature: response.razorpay_signature,
                 paymentMethod: response.method || 'razorpay_checkout'
-              })
-            });
-            const verifyData = await verifyRes.json();
-            if (!verifyRes.ok) {
-              setErrorMsg(verifyData.error || 'Razorpay payment signature verification failed on server.');
-            } else {
+              });
               await refreshUser();
               clearCart();
               setCompletedOrder({ orderId: orderData.orderId, total });
               setStep('success');
               onSuccess(orderData.orderId);
+            } catch (verifyErr: any) {
+              setErrorMsg(verifyErr.message || 'Razorpay payment signature verification failed on server.');
             }
           },
           modal: {
@@ -182,24 +168,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onSuccess }) => {
 
       await new Promise(r => setTimeout(r, 800));
 
-      const verifyRes = await fetch('/api/payment/verify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          orderId: orderData.orderId,
-          razorpayPaymentId: testPaymentId,
-          razorpayOrderId: orderData.razorpayOrderId,
-          razorpaySignature: testSignature
-        })
+      await apiClient.post('/api/payment/verify', {
+        orderId: orderData.orderId,
+        razorpayPaymentId: testPaymentId,
+        razorpayOrderId: orderData.razorpayOrderId,
+        razorpaySignature: testSignature
       });
-
-      const verifyData = await verifyRes.json();
-      if (!verifyRes.ok) {
-        throw new Error(verifyData.error || 'Server signature verification failed');
-      }
 
       await refreshUser();
       clearCart();

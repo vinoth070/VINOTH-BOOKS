@@ -12,6 +12,7 @@ import {
   onAuthStateChanged,
   FirebaseUser
 } from '../firebase';
+import { apiClient, ApiError } from '../services/apiClient';
 
 // Disposable / temporary email blocklist
 export const DISPOSABLE_EMAIL_DOMAINS = [
@@ -67,6 +68,8 @@ export function isPasswordStrong(rules: PasswordValidationRules): boolean {
   );
 }
 
+const ADMIN_EMAILS = ['kalivinoselvikk@gmail.com', 'kalikalivino17@gmail.com'];
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
@@ -104,61 +107,101 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Sync session with backend to get authoritative role, library & wishlist
   const fetchCurrentUser = async (authToken: string) => {
     try {
-      const res = await fetch('/api/auth/me', {
+      const data = await apiClient.get<{ user: User }>('/api/auth/me', {
         headers: { Authorization: `Bearer ${authToken}` }
       });
-      if (res.ok) {
-        const data = await res.json();
+      if (data?.user) {
         setUser(data.user);
         if (Array.isArray(data.user.wishlist)) {
           setWishlist(data.user.wishlist);
         }
       } else {
+        throw new Error('No user returned');
+      }
+    } catch (err: any) {
+      if (err.status === 401 || err.status === 403) {
         localStorage.removeItem('vb_token');
         setToken(null);
         setUser(null);
+      } else if (auth.currentUser) {
+        // Fallback for GitHub Pages static mode or server offline
+        const fbUser = auth.currentUser;
+        const isAdm = ADMIN_EMAILS.includes(fbUser.email?.toLowerCase().trim() || '');
+        const fallbackUser: User = {
+          id: fbUser.uid,
+          name: fbUser.displayName || 'Reader',
+          email: fbUser.email || '',
+          role: isAdm ? 'admin' : 'customer',
+          library: [],
+          wishlist: [],
+          emailVerified: fbUser.emailVerified,
+          createdAt: new Date().toISOString()
+        };
+        setUser(fallbackUser);
       }
-    } catch (err) {
-      console.error('Failed to restore auth session:', err);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
+    // Listen to Firebase auth state changes
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        if (!token) {
+          await syncWithBackend(fbUser);
+        }
+      }
+    });
+
     if (token) {
       fetchCurrentUser(token);
     } else {
       setIsLoading(false);
     }
+
+    return () => unsubscribe();
   }, [token]);
 
   // Synchronize backend auth with Firebase user
   const syncWithBackend = async (firebaseUser: FirebaseUser, fallbackName?: string) => {
-    const idToken = await firebaseUser.getIdToken();
-    const res = await fetch('/api/auth/firebase-login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    try {
+      const idToken = await firebaseUser.getIdToken();
+      const data = await apiClient.post<{ token: string; user: User }>('/api/auth/firebase-login', {
         idToken,
         uid: firebaseUser.uid,
         email: firebaseUser.email,
         name: firebaseUser.displayName || fallbackName || 'Reader',
         emailVerified: firebaseUser.emailVerified
-      })
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Failed to authenticate on backend');
-    }
+      });
 
-    localStorage.setItem('vb_token', data.token);
-    setToken(data.token);
-    setUser(data.user);
-    if (Array.isArray(data.user.wishlist)) {
-      setWishlist(data.user.wishlist);
+      localStorage.setItem('vb_token', data.token);
+      setToken(data.token);
+      setUser(data.user);
+      if (Array.isArray(data.user.wishlist)) {
+        setWishlist(data.user.wishlist);
+      }
+      return data.user;
+    } catch (err: any) {
+      // Graceful fallback for static GitHub Pages or server unreachable
+      const cleanEmail = (firebaseUser.email || '').toLowerCase().trim();
+      const isAdm = ADMIN_EMAILS.includes(cleanEmail);
+      const clientUser: User = {
+        id: firebaseUser.uid,
+        name: firebaseUser.displayName || fallbackName || 'Reader',
+        email: firebaseUser.email || '',
+        role: isAdm ? 'admin' : 'customer',
+        library: [],
+        wishlist: [],
+        emailVerified: firebaseUser.emailVerified,
+        createdAt: new Date().toISOString()
+      };
+      const fallbackToken = `fb_${firebaseUser.uid}`;
+      localStorage.setItem('vb_token', fallbackToken);
+      setToken(fallbackToken);
+      setUser(clientUser);
+      return clientUser;
     }
-    return data.user;
   };
 
   // Sign In with Email & Password
@@ -166,45 +209,81 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const cleanEmail = email.trim();
       let fbUser: FirebaseUser | null = null;
+      let fbAuthError: any = null;
 
       // 1. Attempt Firebase Auth first
       try {
         const cred = await signInWithEmailAndPassword(auth, cleanEmail, password);
         fbUser = cred.user;
       } catch (fbErr: any) {
-        // If user does not exist in Firebase Auth yet, try backend legacy/admin migration
+        fbAuthError = fbErr;
         console.warn('Firebase login check, checking backend credentials:', fbErr.message);
       }
 
       // 2. Call backend login for verification & role resolution
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, password })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        return { success: false, error: data.error || 'Invalid email or password' };
-      }
+      try {
+        const data = await apiClient.post<{ token: string; user: User }>('/api/auth/login', {
+          email: cleanEmail,
+          password
+        });
 
-      // Check email verification for customers (unless admin)
-      if (data.user.role !== 'admin' && fbUser && !fbUser.emailVerified && !data.user.emailVerified) {
-        setUnverifiedEmail(cleanEmail);
-        return {
-          success: false,
-          error: 'Please verify your email address to access your bookstore account. Check your inbox for the verification link.',
-          requiresEmailVerification: true
-        };
-      }
+        // Check email verification for customers (unless admin)
+        if (data.user.role !== 'admin' && fbUser && !fbUser.emailVerified && !data.user.emailVerified) {
+          setUnverifiedEmail(cleanEmail);
+          return {
+            success: false,
+            error: 'Please verify your email address to access your bookstore account. Check your inbox for the verification link.',
+            requiresEmailVerification: true
+          };
+        }
 
-      localStorage.setItem('vb_token', data.token);
-      setToken(data.token);
-      setUser(data.user);
-      setUnverifiedEmail(null);
-      if (Array.isArray(data.user.wishlist)) {
-        setWishlist(data.user.wishlist);
+        localStorage.setItem('vb_token', data.token);
+        setToken(data.token);
+        setUser(data.user);
+        setUnverifiedEmail(null);
+        if (Array.isArray(data.user.wishlist)) {
+          setWishlist(data.user.wishlist);
+        }
+        return { success: true, user: data.user };
+      } catch (apiErr: any) {
+        // If backend failed but Firebase Auth succeeded (e.g. static hosting on GitHub Pages)
+        if (fbUser) {
+          const isAdm = ADMIN_EMAILS.includes(cleanEmail.toLowerCase());
+          if (!isAdm && !fbUser.emailVerified) {
+            setUnverifiedEmail(cleanEmail);
+            return {
+              success: false,
+              error: 'Please verify your email address before signing in. Check your inbox for the confirmation link.',
+              requiresEmailVerification: true
+            };
+          }
+          const clientUser: User = {
+            id: fbUser.uid,
+            name: fbUser.displayName || 'Reader',
+            email: cleanEmail,
+            role: isAdm ? 'admin' : 'customer',
+            library: [],
+            wishlist: [],
+            emailVerified: fbUser.emailVerified,
+            createdAt: new Date().toISOString()
+          };
+          const fallbackToken = `fb_${fbUser.uid}`;
+          localStorage.setItem('vb_token', fallbackToken);
+          setToken(fallbackToken);
+          setUser(clientUser);
+          setUnverifiedEmail(null);
+          return { success: true, user: clientUser };
+        }
+
+        // Return clear, user-friendly error
+        const friendlyMessage = apiErr instanceof ApiError
+          ? apiErr.message
+          : (fbAuthError?.code === 'auth/wrong-password' || fbAuthError?.code === 'auth/invalid-credential')
+            ? 'Invalid email or password. Please try again.'
+            : (apiErr?.message || 'Invalid email or password');
+
+        return { success: false, error: friendlyMessage };
       }
-      return { success: true, user: data.user };
     } catch (err: any) {
       return { success: false, error: err.message || 'Authentication failed' };
     }
@@ -220,7 +299,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: true, user: syncedUser };
     } catch (err: any) {
       console.error('Google Sign-In failed:', err);
-      return { success: false, error: err.message || 'Google authentication failed' };
+      const msg = err.code === 'auth/popup-closed-by-user'
+        ? 'Sign-in cancelled. Please complete authentication in the popup window.'
+        : (err.message || 'Google authentication failed');
+      return { success: false, error: msg };
     }
   };
 
@@ -252,7 +334,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
         fbUser = cred.user;
-        // Send email verification
         await sendEmailVerification(cred.user);
       } catch (fbErr: any) {
         if (fbErr.code === 'auth/email-already-in-use') {
@@ -262,28 +343,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       // 2. Register on Backend
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      try {
+        const data = await apiClient.post<{ token: string; user: User }>('/api/auth/register', {
           name: cleanName,
           email: cleanEmail,
           password,
           uid: fbUser?.uid,
           emailVerified: fbUser?.emailVerified ?? false
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        return { success: false, error: data.error || 'Account registration failed' };
-      }
+        });
 
-      setUnverifiedEmail(cleanEmail);
-      return {
-        success: true,
-        user: data.user,
-        requiresEmailVerification: true
-      };
+        setUnverifiedEmail(cleanEmail);
+        return {
+          success: true,
+          user: data.user,
+          requiresEmailVerification: true
+        };
+      } catch (apiErr: any) {
+        // If backend is static/offline but Firebase succeeded
+        if (fbUser) {
+          setUnverifiedEmail(cleanEmail);
+          return {
+            success: true,
+            requiresEmailVerification: true
+          };
+        }
+        return { success: false, error: apiErr.message || 'Account registration failed' };
+      }
     } catch (err: any) {
       return { success: false, error: err.message || 'Failed to register account' };
     }
@@ -306,18 +391,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const forgotPassword = async (email: string) => {
     try {
       const cleanEmail = email.trim();
+      let sentViaFirebase = false;
       try {
         await sendPasswordResetEmail(auth, cleanEmail);
+        sentViaFirebase = true;
       } catch (fbErr) {
         console.warn('Firebase reset note:', fbErr);
       }
-      const res = await fetch('/api/auth/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail })
-      });
-      const data = await res.json();
-      return { success: true, message: data.message || `Password reset instructions sent to ${cleanEmail}.` };
+
+      try {
+        const data = await apiClient.post<{ message: string }>('/api/auth/forgot-password', {
+          email: cleanEmail
+        });
+        return { success: true, message: data.message || `Password reset instructions sent to ${cleanEmail}.` };
+      } catch (apiErr) {
+        if (sentViaFirebase) {
+          return { success: true, message: `Password reset instructions sent to ${cleanEmail}. Please check your inbox.` };
+        }
+        return { success: false, error: 'Failed to send password reset. Please verify your email.' };
+      }
     } catch (err: any) {
       return { success: false, error: err.message || 'Failed to send password reset' };
     }
@@ -355,21 +447,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     try {
-      const res = await fetch('/api/wishlist/toggle', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ bookId })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setWishlist(data.wishlist || []);
-        setUser(prev => prev ? { ...prev, wishlist: data.wishlist || [] } : null);
+      const data = await apiClient.post<{ wishlist: string[] }>('/api/wishlist/toggle', { bookId });
+      if (data?.wishlist) {
+        setWishlist(data.wishlist);
+        setUser(prev => prev ? { ...prev, wishlist: data.wishlist } : null);
       }
     } catch (err) {
       console.error('Failed to toggle wishlist:', err);
+      // Fallback local toggle
+      setWishlist(prev => {
+        const next = prev.includes(bookId) ? prev.filter(id => id !== bookId) : [...prev, bookId];
+        return next;
+      });
     }
   };
 

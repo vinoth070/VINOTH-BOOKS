@@ -3,6 +3,8 @@ import { BookOpen, Download, ShieldCheck, ArrowRight, BookMarked, Search } from 
 import { Book } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
+import { apiClient } from '../services/apiClient';
+import { FALLBACK_BOOKS } from '../data/fallbackData';
 
 interface MyLibraryViewProps {
   onOpenReader: (book: Book) => void;
@@ -26,34 +28,52 @@ export const MyLibraryView: React.FC<MyLibraryViewProps> = ({ onOpenReader, onSe
       }
       try {
         setLoading(true);
-        const res = await fetch('/api/library', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setLibraryBooks(data.library || []);
+        const data = await apiClient.get<{ library: Book[] }>('/api/library');
+        if (data && Array.isArray(data.library)) {
+          setLibraryBooks(data.library);
+        } else {
+          throw new Error('No library returned');
         }
       } catch (err) {
-        console.error('Failed to load user library:', err);
+        // Fallback for static/offline: match user.library IDs against FALLBACK_BOOKS
+        if (user?.library && user.library.length > 0) {
+          const matched = FALLBACK_BOOKS.filter(b => user.library.includes(b.id));
+          setLibraryBooks(matched);
+        } else {
+          setLibraryBooks([]);
+        }
       } finally {
         setLoading(false);
       }
     };
     fetchLibrary();
-  }, [token]);
+  }, [token, user]);
 
   const handleDownload = async (book: Book) => {
     try {
       setDownloadingId(book.id);
-      const res = await fetch(`/api/library/download/${book.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) {
-        const errData = await res.json();
-        alert(errData.error || 'Failed to download file');
+      const res = await apiClient.rawFetch(`/api/library/download/${book.id}`);
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${book.title.replace(/[^a-zA-Z0-9_-]/g, '_')}_VINOTH_BOOKS.txt`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
         return;
       }
-      const blob = await res.blob();
+    } catch {
+      // Fallback client text download
+    } finally {
+      setDownloadingId(null);
+    }
+
+    try {
+      const content = `VINOTH BOOKS DIGITAL EDITION\nTitle: ${book.title}\nAuthor: ${book.author}\n\n${book.fullDescription}\n\nKey Learnings:\n${(book.keyLearnings || []).join('\n')}`;
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -63,9 +83,7 @@ export const MyLibraryView: React.FC<MyLibraryViewProps> = ({ onOpenReader, onSe
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch {
-      alert('Network error while requesting secure download');
-    } finally {
-      setDownloadingId(null);
+      alert('Unable to download file.');
     }
   };
 
