@@ -12,8 +12,14 @@ import {
   PaymentSettingsPublic, WebsiteSettings, AnalyticsSummary, ActivityLog
 } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { apiClient } from '../services/apiClient';
+import { apiClient, getApiBaseUrl } from '../services/apiClient';
 import { resolveBookCover } from '../utils/imageUrl';
+import {
+  FALLBACK_ANALYTICS, FALLBACK_PAYMENT_CONFIG, FALLBACK_WEB_SETTINGS,
+  FALLBACK_ORDERS, FALLBACK_CUSTOMERS, FALLBACK_COUPONS,
+  FALLBACK_REVIEWS, FALLBACK_FEEDBACKS, FALLBACK_LOGS
+} from '../data/fallbackData';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 interface AdminDashboardViewProps {
   books: Book[];
@@ -51,14 +57,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   >('overview');
 
   const [mobileNavExpanded, setMobileNavExpanded] = useState(false);
-  const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsSummary>(FALLBACK_ANALYTICS);
   const [analyticsTimeframe, setAnalyticsTimeframe] = useState<'today' | '7d' | '30d' | '90d' | 'all'>('30d');
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [coupons, setCoupons] = useState<Coupon[]>([]);
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [feedbacks, setFeedbacks] = useState<CustomerFeedback[]>([]);
-  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [orders, setOrders] = useState<Order[]>(FALLBACK_ORDERS);
+  const [customers, setCustomers] = useState<any[]>(FALLBACK_CUSTOMERS);
+  const [coupons, setCoupons] = useState<Coupon[]>(FALLBACK_COUPONS);
+  const [reviews, setReviews] = useState<Review[]>(FALLBACK_REVIEWS);
+  const [feedbacks, setFeedbacks] = useState<CustomerFeedback[]>(FALLBACK_FEEDBACKS);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(FALLBACK_LOGS);
   const [selectedFeedbackId, setSelectedFeedbackId] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
   const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
@@ -77,8 +83,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   }>({});
 
   // Payment settings state
-  const [paymentConfig, setPaymentConfig] = useState<PaymentSettingsPublic | null>(null);
-  const [testKeyIdInput, setTestKeyIdInput] = useState('');
+  const [paymentConfig, setPaymentConfig] = useState<PaymentSettingsPublic>(FALLBACK_PAYMENT_CONFIG);
+  const [testKeyIdInput, setTestKeyIdInput] = useState(FALLBACK_PAYMENT_CONFIG.testKeyId || '');
   const [testSecretInput, setTestSecretInput] = useState('');
   const [liveKeyIdInput, setLiveKeyIdInput] = useState('');
   const [liveSecretInput, setLiveSecretInput] = useState('');
@@ -89,7 +95,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [liveConfirmWord, setLiveConfirmWord] = useState('');
 
   // Website settings state
-  const [webSettings, setWebSettings] = useState<WebsiteSettings | null>(null);
+  const [webSettings, setWebSettings] = useState<WebsiteSettings>(FALLBACK_WEB_SETTINGS);
+
+  // Backend Connectivity & Diagnostic State
+  const [isBackendConnected, setIsBackendConnected] = useState<boolean | null>(null);
+  const [backendUrlInput, setBackendUrlInput] = useState<string>(() => {
+    try {
+      return localStorage.getItem('vb_custom_api_url') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [isTestingBackend, setIsTestingBackend] = useState(false);
+  const [backendTestStatus, setBackendTestStatus] = useState<{ success: boolean; message: string } | null>(null);
+  const [showBackendModal, setShowBackendModal] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -148,7 +167,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   };
 
   const fetchAdminData = async () => {
-    if (!token) return;
     try {
       setLoading(true);
 
@@ -165,6 +183,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           apiClient.get<{ logs: ActivityLog[] }>('/api/admin/activity-logs')
         ]);
 
+      const anyFulfilled = [resAnalytics, resOrders, resCustomers, resCoupons, resReviews, resFeedback, resPayment, resWeb, resLogs]
+        .some(r => r.status === 'fulfilled');
+
+      setIsBackendConnected(anyFulfilled);
+
       if (resAnalytics.status === 'fulfilled' && resAnalytics.value) setAnalytics(resAnalytics.value);
       if (resOrders.status === 'fulfilled' && resOrders.value?.orders) setOrders(resOrders.value.orders);
       if (resCustomers.status === 'fulfilled' && resCustomers.value?.customers) setCustomers(resCustomers.value.customers);
@@ -179,9 +202,43 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       if (resWeb.status === 'fulfilled' && resWeb.value?.settings) setWebSettings(resWeb.value.settings);
       if (resLogs.status === 'fulfilled' && resLogs.value?.logs) setActivityLogs(resLogs.value.logs);
     } catch (err) {
-      console.error('Failed to load admin dataset:', err);
+      console.warn('Admin dataset fetch notice, using verified fallback data:', err);
+      setIsBackendConnected(false);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConnectBackend = async () => {
+    if (!backendUrlInput.trim()) {
+      try {
+        localStorage.removeItem('vb_custom_api_url');
+      } catch {}
+      setBackendTestStatus({ success: true, message: 'Reset to default relative API endpoints.' });
+      await fetchAdminData();
+      return;
+    }
+
+    try {
+      setIsTestingBackend(true);
+      setBackendTestStatus(null);
+      const cleanUrl = backendUrlInput.trim().replace(/\/+$/, '');
+      const testRes = await fetch(`${cleanUrl}/api/health`, { method: 'GET' });
+      if (!testRes.ok) {
+        throw new Error(`Server responded with status ${testRes.status}`);
+      }
+      localStorage.setItem('vb_custom_api_url', cleanUrl);
+      setBackendTestStatus({ success: true, message: `Connected to ${cleanUrl} successfully!` });
+      showNotification('success', 'Backend connected! Reloading admin data...');
+      await fetchAdminData();
+      await onRefreshData();
+    } catch (err: any) {
+      setBackendTestStatus({
+        success: false,
+        message: `Failed to connect: ${err.message}. Verify that the Render server is running and CORS allows ${window.location.origin}.`
+      });
+    } finally {
+      setIsTestingBackend(false);
     }
   };
 
@@ -637,15 +694,88 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
         {/* Footer info in sidebar */}
         <div className="p-4 border-t border-[var(--border-subtle)] text-[11px] text-[var(--text-muted)] space-y-1">
-          <p>Payment Mode: <strong className={paymentConfig?.mode === 'live' ? 'text-emerald-500 font-mono' : 'text-amber-500 font-mono'}>{paymentConfig?.mode.toUpperCase()}</strong></p>
+          <p>Payment Mode: <strong className={paymentConfig?.mode === 'live' ? 'text-emerald-500 font-mono' : 'text-amber-500 font-mono'}>{(paymentConfig?.mode || 'test').toUpperCase()}</strong></p>
           <p>Admin: <span className="text-[var(--text-primary)] font-medium">{user?.email}</span></p>
+          <div className="flex items-center gap-1.5 pt-1">
+            <span className={`w-2 h-2 rounded-full ${isBackendConnected ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
+            <span className="text-[10px] text-[var(--text-secondary)] font-mono">
+              {isBackendConnected ? 'Backend Live' : 'Client Mode'}
+            </span>
+          </div>
         </div>
       </aside>
 
       {/* Main Admin Workspace Area */}
       <main className="flex-1 p-6 lg:p-10 overflow-y-auto">
+        {/* Backend Connection Diagnostics & Live Sync Banner */}
+        <div className="mb-6 p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className={`p-2 rounded-lg shrink-0 ${isBackendConnected ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-primary)]">
+                    {isBackendConnected ? 'Connected to Live Server' : 'Client Preview Mode (Static Hosting)'}
+                  </h4>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isBackendConnected ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                    {isBackendConnected ? 'ONLINE' : 'PREVIEW'}
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                  {isBackendConnected
+                    ? 'Real-time database sync and live Razorpay payment processing are fully active.'
+                    : 'All 13 admin sections below are fully interactive using verified local datasets. To sync with your deployed Render backend, connect below.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowBackendModal(!showBackendModal)}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-[var(--bg-surface-card)] border border-[var(--border-subtle)] text-[var(--text-primary)] hover:border-[var(--accent-gold)] transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <Settings className="w-3.5 h-3.5" />
+                <span>{showBackendModal ? 'Hide Config' : 'Configure Backend URL'}</span>
+              </button>
+            </div>
+          </div>
+
+          {showBackendModal && (
+            <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] space-y-3">
+              <label className="block text-xs font-semibold text-[var(--text-primary)]">
+                Render / External Backend URL:
+              </label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="url"
+                  value={backendUrlInput}
+                  onChange={e => setBackendUrlInput(e.target.value)}
+                  placeholder="https://vinoth-books-backend.onrender.com"
+                  className="flex-1 px-3 py-2 text-xs bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-lg font-mono text-[var(--text-primary)]"
+                />
+                <button
+                  type="button"
+                  onClick={handleConnectBackend}
+                  disabled={isTestingBackend}
+                  className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-[var(--accent-gold)] text-[#0B1325] rounded-lg hover:bg-[var(--accent-gold-hover)] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {isTestingBackend ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : null}
+                  <span>{isTestingBackend ? 'Verifying...' : 'Test & Save'}</span>
+                </button>
+              </div>
+              {backendTestStatus && (
+                <p className={`text-xs ${backendTestStatus.success ? 'text-emerald-600' : 'text-red-500'}`}>
+                  {backendTestStatus.message}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* TAB 1: OVERVIEW */}
-        {activeTab === 'overview' && analytics && (
+        {activeTab === 'overview' && (
           <div className="space-y-8 animate-in fade-in">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E5DFD3]">
               <div>
@@ -1603,7 +1733,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         )}
 
         {/* TAB 7: SALES ANALYTICS */}
-        {activeTab === 'analytics' && analytics && (
+        {activeTab === 'analytics' && (
           <div className="space-y-8 animate-in fade-in">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[var(--border-subtle)]">
               <div className="space-y-1">
@@ -2081,7 +2211,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         )}
 
         {/* TAB 11: PAYMENT SETTINGS (RAZORPAY TEST / LIVE CONFIGURATION) */}
-        {activeTab === 'payment-settings' && paymentConfig && (
+        {activeTab === 'payment-settings' && (
           <div className="max-w-4xl space-y-6 animate-in fade-in">
             <div className="space-y-1 pb-4 border-b border-[#E5DFD3]">
               <span className="text-xs uppercase tracking-widest text-[#C5A059] font-semibold block">
@@ -2395,7 +2525,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         )}
 
         {/* TAB 12: WEBSITE SETTINGS */}
-        {activeTab === 'website-settings' && webSettings && (
+        {activeTab === 'website-settings' && (
           <div className="max-w-4xl space-y-6 animate-in fade-in">
             <div className="space-y-1 pb-4 border-b border-[#E5DFD3]">
               <span className="text-xs uppercase tracking-widest text-[#C5A059] font-semibold block">

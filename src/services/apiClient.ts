@@ -30,10 +30,14 @@ export const getApiBaseUrl = (): string => {
   if (envUrl) {
     return envUrl.replace(/\/+$/, '');
   }
-  // If hosted on GitHub Pages and no VITE_API_BASE_URL is provided
-  if (typeof window !== 'undefined' && window.location.hostname.includes('github.io')) {
-    // When on GitHub Pages without custom backend env, return empty string so relative requests can be safely intercepted
-    return '';
+  // If hosted on GitHub Pages or dev, check for user-saved backend URL (e.g. Render live instance)
+  if (typeof window !== 'undefined') {
+    try {
+      const customUrl = localStorage.getItem('vb_custom_api_url');
+      if (customUrl && customUrl.trim()) {
+        return customUrl.trim().replace(/\/+$/, '');
+      }
+    } catch {}
   }
   return '';
 };

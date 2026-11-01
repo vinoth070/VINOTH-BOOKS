@@ -22,6 +22,7 @@ import { WishlistView } from './views/WishlistView';
 import { SettingsView } from './views/SettingsView';
 import { LegalView } from './views/LegalView';
 import { AdminDashboardView } from './views/AdminDashboardView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Lock } from 'lucide-react';
 import { apiClient, getApiUrl } from './services/apiClient';
 import { FALLBACK_BOOKS, FALLBACK_CATEGORIES } from './data/fallbackData';
@@ -293,14 +294,16 @@ https://vinoth070.github.io/VINOTH-BOOKS/
 
         {currentView === 'admin' && (
           isAdmin ? (
-            <AdminDashboardView
-              books={books}
-              categories={categories}
-              onRefreshData={fetchData}
-              onSelectBook={handleSelectBook}
-              onOpenReader={handleOpenReader}
-              onLogout={handleLogout}
-            />
+            <ErrorBoundary fallbackTitle="Admin Workspace Recovery">
+              <AdminDashboardView
+                books={books}
+                categories={categories}
+                onRefreshData={fetchData}
+                onSelectBook={handleSelectBook}
+                onOpenReader={handleOpenReader}
+                onLogout={handleLogout}
+              />
+            </ErrorBoundary>
           ) : !user ? (
             /* Protected Route: Not Logged In */
             <div className="max-w-md mx-auto py-24 px-4 text-center space-y-5 animate-in fade-in">

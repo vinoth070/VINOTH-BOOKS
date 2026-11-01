@@ -6,7 +6,7 @@ import path from 'path';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
-import { initializeApp as initAdminApp, getApps as getAdminApps } from 'firebase-admin/app';
+import { initializeApp as initAdminApp, getApps as getAdminApps, cert } from 'firebase-admin/app';
 import { getAuth as getAdminAuth } from 'firebase-admin/auth';
 import { db, Book, Category, Order, User, hashPassword, generateSalt } from './server/db.js';
 
@@ -19,18 +19,43 @@ const APP_SECRET = process.env.APP_SECRET || 'vinoth-books-super-secure-key-2026
 // Initialize Firebase Admin SDK for Server-Side ID Token Verification
 let adminAuth: ReturnType<typeof getAdminAuth> | null = null;
 try {
+  let serviceAccount: any = null;
+  const rawKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (rawKey) {
+    try {
+      const decoded = rawKey.startsWith('{') ? rawKey : Buffer.from(rawKey, 'base64').toString('utf-8');
+      serviceAccount = JSON.parse(decoded);
+    } catch (parseErr) {
+      console.warn('[Firebase Admin] Could not parse FIREBASE_SERVICE_ACCOUNT_KEY JSON:', parseErr);
+    }
+  }
+
   let fbProjectId = process.env.FIREBASE_PROJECT_ID;
   const configPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
   if (fs.existsSync(configPath)) {
-    const raw = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    fbProjectId = fbProjectId || raw.projectId;
+    try {
+      const raw = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      fbProjectId = fbProjectId || raw.projectId;
+    } catch {}
   }
-  if (fbProjectId) {
-    const adminApp = getAdminApps().length === 0
-      ? initAdminApp({ projectId: fbProjectId })
-      : getAdminApps()[0];
-    adminAuth = getAdminAuth(adminApp);
-    console.log(`[Firebase Admin] Initialized with project ID: ${fbProjectId}`);
+
+  if (getAdminApps().length === 0) {
+    let adminApp;
+    if (serviceAccount) {
+      adminApp = initAdminApp({
+        credential: cert(serviceAccount),
+        projectId: serviceAccount.project_id || fbProjectId
+      });
+      console.log(`[Firebase Admin] Initialized with Service Account: ${serviceAccount.client_email}`);
+    } else if (fbProjectId) {
+      adminApp = initAdminApp({ projectId: fbProjectId });
+      console.log(`[Firebase Admin] Initialized with project ID: ${fbProjectId}`);
+    }
+    if (adminApp) {
+      adminAuth = getAdminAuth(adminApp);
+    }
+  } else {
+    adminAuth = getAdminAuth(getAdminApps()[0]);
   }
 } catch (err: any) {
   console.warn('[Firebase Admin] Warning during initialization:', err.message);

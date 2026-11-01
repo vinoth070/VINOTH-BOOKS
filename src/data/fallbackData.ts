@@ -1,4 +1,7 @@
-import { Book, Category } from '../types';
+import {
+  Book, Category, AnalyticsSummary, PaymentSettingsPublic,
+  WebsiteSettings, Order, Coupon, Review, CustomerFeedback, ActivityLog
+} from '../types';
 
 export const FALLBACK_CATEGORIES: Category[] = [
   {
@@ -171,3 +174,300 @@ export const FALLBACK_BOOKS: Book[] = [
     updatedAt: "2026-02-10T10:00:00Z"
   }
 ];
+
+export const FALLBACK_ANALYTICS: AnalyticsSummary = {
+  summary: {
+    totalRevenue: 349700,
+    totalOrders: 428,
+    paidOrdersCount: 412,
+    totalSales: 512,
+    totalCustomers: 386,
+    totalBooks: 3,
+    publishedBooks: 3,
+    draftBooks: 0,
+    totalCategories: 3,
+    averageRating: 4.87
+  },
+  categoryRevenue: {
+    "Artificial Intelligence": 142000,
+    "Deep Work & Productivity": 118800,
+    "Wealth & Independent Business": 88900
+  },
+  bestSellers: [
+    {
+      id: "book-ai-mind",
+      title: "The AI Mind: Architecture of Tomorrow",
+      category: "Artificial Intelligence",
+      price: 799,
+      salesCount: 482,
+      revenue: 142000,
+      coverImage: "/assets/images/book_cover_ai_revolution_1793365303535.jpg"
+    },
+    {
+      id: "book-deep-focus",
+      title: "Deep Focus: The Sovereign Attention Protocol",
+      category: "Deep Work & Productivity",
+      price: 599,
+      salesCount: 631,
+      revenue: 118800,
+      coverImage: "/assets/images/book_cover_deep_focus_1793365304657.jpg"
+    },
+    {
+      id: "book-wealth-playbook",
+      title: "The Sovereign Wealth Playbook",
+      category: "Wealth & Independent Business",
+      price: 899,
+      salesCount: 894,
+      revenue: 88900,
+      coverImage: "/assets/images/book_cover_wealth_playbook_1793365306099.jpg"
+    }
+  ],
+  monthlySales: [
+    { month: "Jan 2026", sales: 74, revenue: 52400 },
+    { month: "Feb 2026", sales: 96, revenue: 68800 },
+    { month: "Mar 2026", sales: 132, revenue: 98400 },
+    { month: "Apr 2026", sales: 210, revenue: 130100 }
+  ],
+  dailyOrders: [
+    { date: "2026-04-10", orders: 18, revenue: 13200 },
+    { date: "2026-04-11", orders: 22, revenue: 16400 },
+    { date: "2026-04-12", orders: 19, revenue: 14100 },
+    { date: "2026-04-13", orders: 25, revenue: 18900 },
+    { date: "2026-04-14", orders: 28, revenue: 21200 },
+    { date: "2026-04-15", orders: 32, revenue: 24600 },
+    { date: "2026-04-16", orders: 30, revenue: 22500 }
+  ],
+  recentOrders: [
+    {
+      id: "ORD-94821",
+      userId: "usr-demo-1",
+      customerName: "Arun Krishnan",
+      customerEmail: "arun.k@example.com",
+      items: [
+        {
+          bookId: "book-ai-mind",
+          title: "The AI Mind: Architecture of Tomorrow",
+          price: 799,
+          coverImage: "/assets/images/book_cover_ai_revolution_1793365303535.jpg"
+        }
+      ],
+      subtotal: 799,
+      discount: 0,
+      total: 799,
+      paymentStatus: "paid",
+      paymentMethod: "UPI",
+      transactionReference: "pay_test_9482101",
+      paymentMode: "test",
+      isDemoData: true,
+      createdAt: new Date(Date.now() - 3600000 * 2).toISOString()
+    },
+    {
+      id: "ORD-94820",
+      userId: "usr-demo-2",
+      customerName: "Priya Sundaram",
+      customerEmail: "priya.s@example.com",
+      items: [
+        {
+          bookId: "book-deep-focus",
+          title: "Deep Focus: The Sovereign Attention Protocol",
+          price: 599,
+          coverImage: "/assets/images/book_cover_deep_focus_1793365304657.jpg"
+        }
+      ],
+      subtotal: 599,
+      discount: 0,
+      total: 599,
+      paymentStatus: "paid",
+      paymentMethod: "NetBanking",
+      transactionReference: "pay_test_9482002",
+      paymentMode: "test",
+      isDemoData: true,
+      createdAt: new Date(Date.now() - 3600000 * 6).toISOString()
+    }
+  ],
+  recentReviews: [
+    {
+      id: "rev-demo-1",
+      bookId: "book-ai-mind",
+      userId: "usr-demo-1",
+      userName: "Arun Krishnan",
+      rating: 5,
+      title: "A masterclass in modern agentic systems",
+      comment: "Dismantles the hype and focuses on the concrete architecture. Highly recommended for every engineering lead.",
+      verifiedPurchase: true,
+      status: "approved",
+      createdAt: new Date(Date.now() - 86400000 * 2).toISOString()
+    }
+  ],
+  customerActivity: [
+    { id: "act-1", name: "Arun Krishnan", email: "arun.k@example.com", action: "Purchased 'The AI Mind'", time: "2 hours ago" },
+    { id: "act-2", name: "Priya Sundaram", email: "priya.s@example.com", action: "Purchased 'Deep Focus'", time: "6 hours ago" },
+    { id: "act-3", name: "Rajesh Varma", email: "rajesh.v@example.com", action: "Created Reader Account", time: "1 day ago" }
+  ]
+};
+
+export const FALLBACK_PAYMENT_CONFIG: PaymentSettingsPublic = {
+  mode: 'test',
+  activeKeyId: 'rzp_test_vinothbooks',
+  testKeyId: 'rzp_test_vinothbooks',
+  liveKeyId: '',
+  isTestConfigured: true,
+  isLiveConfigured: false,
+  currency: 'INR',
+  isLiveConfirmed: false,
+  hasTestSecret: true,
+  hasLiveSecret: false,
+  hasWebhookSecret: false,
+  updatedAt: new Date().toISOString()
+};
+
+export const FALLBACK_WEB_SETTINGS: WebsiteSettings = {
+  storeName: "VINOTH BOOKS",
+  tagline: "Ideas Into Pages. Knowledge Without Limits.",
+  supportEmail: "kalikalivino17@gmail.com",
+  supportHours: "Mon - Sat, 9:00 AM - 7:00 PM IST",
+  announcementBanner: {
+    enabled: true,
+    text: "Welcome to VINOTH BOOKS — Digital Publishing & Sovereign Knowledge",
+    linkText: "Explore Books"
+  },
+  currencySymbol: "₹",
+  maintenanceMode: false
+};
+
+export const FALLBACK_ORDERS: Order[] = FALLBACK_ANALYTICS.recentOrders;
+
+export const FALLBACK_CUSTOMERS = [
+  {
+    id: "usr-demo-1",
+    name: "Arun Krishnan",
+    email: "arun.k@example.com",
+    role: "customer",
+    booksOwnedCount: 2,
+    ordersCount: 2,
+    totalSpent: 1398,
+    joinedAt: "2026-03-15T10:00:00Z"
+  },
+  {
+    id: "usr-demo-2",
+    name: "Priya Sundaram",
+    email: "priya.s@example.com",
+    role: "customer",
+    booksOwnedCount: 1,
+    ordersCount: 1,
+    totalSpent: 599,
+    joinedAt: "2026-03-22T14:30:00Z"
+  },
+  {
+    id: "usr-demo-3",
+    name: "Rajesh Varma",
+    email: "rajesh.v@example.com",
+    role: "customer",
+    booksOwnedCount: 3,
+    ordersCount: 3,
+    totalSpent: 2297,
+    joinedAt: "2026-04-01T09:15:00Z"
+  }
+];
+
+export const FALLBACK_COUPONS: Coupon[] = [
+  {
+    id: "cpn-welcome",
+    code: "WELCOME20",
+    discountType: "percentage",
+    discountValue: 20,
+    minPurchase: 499,
+    expiresAt: "2026-12-31",
+    isActive: true,
+    usageCount: 84
+  },
+  {
+    id: "cpn-special",
+    code: "SOVEREIGN50",
+    discountType: "fixed",
+    discountValue: 150,
+    minPurchase: 799,
+    expiresAt: "2026-12-31",
+    isActive: true,
+    usageCount: 42
+  }
+];
+
+export const FALLBACK_REVIEWS: Review[] = [
+  {
+    id: "rev-1",
+    bookId: "book-ai-mind",
+    userId: "usr-demo-1",
+    userName: "Arun Krishnan",
+    rating: 5,
+    title: "A masterclass in modern agentic systems",
+    comment: "Dismantles the hype and focuses on the concrete architecture. Highly recommended for every engineering lead.",
+    verifiedPurchase: true,
+    status: "approved",
+    createdAt: "2026-04-14T11:20:00Z"
+  },
+  {
+    id: "rev-2",
+    bookId: "book-deep-focus",
+    userId: "usr-demo-2",
+    userName: "Priya Sundaram",
+    rating: 5,
+    title: "Changed my daily creative workflow",
+    comment: "The 90-minute immersion protocol gave me back 3 productive hours every single day.",
+    verifiedPurchase: true,
+    status: "approved",
+    createdAt: "2026-04-13T16:45:00Z"
+  }
+];
+
+export const FALLBACK_FEEDBACKS: CustomerFeedback[] = [
+  {
+    id: "fb-101",
+    customerId: "usr-demo-1",
+    customerName: "Arun Krishnan",
+    customerEmail: "arun.k@example.com",
+    subject: "Audiobook version availability inquiry",
+    message: "Loving 'The AI Mind' manuscript. Are there plans to release audio narrations for offline commutes?",
+    category: "suggestion",
+    status: "replied",
+    replies: [
+      {
+        id: "rep-1",
+        senderRole: "admin",
+        senderName: "Vinoth (Publisher)",
+        message: "Thank you Arun! Studio narration is currently in post-production and will be added as a free update for all verified readers.",
+        createdAt: "2026-04-15T09:30:00Z"
+      }
+    ],
+    createdAt: "2026-04-14T18:10:00Z",
+    updatedAt: "2026-04-15T09:30:00Z"
+  }
+];
+
+export const FALLBACK_LOGS: ActivityLog[] = [
+  {
+    id: "log-1",
+    action: "STORE_INITIALIZED",
+    details: "VINOTH BOOKS storefront catalog and parameters loaded",
+    adminEmail: "kalikalivino17@gmail.com",
+    ip: "127.0.0.1",
+    timestamp: new Date(Date.now() - 3600000 * 24).toISOString()
+  },
+  {
+    id: "log-2",
+    action: "FIREBASE_AUTH_VERIFIED",
+    details: "Owner authentication gate verified for kalikalivino17@gmail.com",
+    adminEmail: "kalikalivino17@gmail.com",
+    ip: "127.0.0.1",
+    timestamp: new Date(Date.now() - 3600000 * 8).toISOString()
+  },
+  {
+    id: "log-3",
+    action: "GATEWAY_CONFIG_CHECK",
+    details: "Payment readiness inspection passed (Razorpay INR)",
+    adminEmail: "kalikalivino17@gmail.com",
+    ip: "127.0.0.1",
+    timestamp: new Date(Date.now() - 3600000 * 2).toISOString()
+  }
+];
+
