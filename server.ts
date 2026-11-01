@@ -1,17 +1,40 @@
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
+import { initializeApp as initAdminApp, getApps as getAdminApps } from 'firebase-admin/app';
+import { getAuth as getAdminAuth } from 'firebase-admin/auth';
 import { db, Book, Category, Order, User, hashPassword, generateSalt } from './server/db.js';
 
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const APP_SECRET = process.env.APP_SECRET || 'vinoth-books-super-secure-key-2026';
+
+// Initialize Firebase Admin SDK for Server-Side ID Token Verification
+let adminAuth: ReturnType<typeof getAdminAuth> | null = null;
+try {
+  let fbProjectId = process.env.FIREBASE_PROJECT_ID;
+  const configPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
+  if (fs.existsSync(configPath)) {
+    const raw = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    fbProjectId = fbProjectId || raw.projectId;
+  }
+  if (fbProjectId) {
+    const adminApp = getAdminApps().length === 0
+      ? initAdminApp({ projectId: fbProjectId })
+      : getAdminApps()[0];
+    adminAuth = getAdminAuth(adminApp);
+    console.log(`[Firebase Admin] Initialized with project ID: ${fbProjectId}`);
+  }
+} catch (err: any) {
+  console.warn('[Firebase Admin] Warning during initialization:', err.message);
+}
 
 // CORS Configuration for Production & Local Development
 const allowedOrigins = [
@@ -43,13 +66,18 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
 
+// Pre-flight handling
+app.options('*', cors());
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'VINOTH BOOKS API',
     timestamp: new Date().toISOString(),
-    corsAllowed: true
+    corsAllowed: true,
+    firebaseAdminReady: Boolean(adminAuth),
+    port: PORT
   });
 });
 
@@ -78,20 +106,64 @@ function verifyToken(tokenString?: string): { userId: string; role: 'admin' | 'c
   }
 }
 
-// Authentication middleware
-function requireAuth(req: Request, res: Response, next: NextFunction) {
+// Server-side Firebase ID token verification
+async function verifyFirebaseIdToken(token?: string) {
+  if (!token || !adminAuth) return null;
+  try {
+    return await adminAuth.verifyIdToken(token);
+  } catch (err: any) {
+    return null;
+  }
+}
+
+// Authentication middleware (supports HMAC tokens and verified Firebase ID tokens)
+async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : undefined;
-  const decoded = verifyToken(token);
-  if (!decoded) {
+  if (!token) {
     return res.status(401).json({ error: 'Authentication required' });
   }
-  const user = db.getUserById(decoded.userId);
-  if (!user) {
-    return res.status(401).json({ error: 'User account not found' });
+
+  // 1. Check HMAC session token
+  const decoded = verifyToken(token);
+  if (decoded) {
+    const user = db.getUserById(decoded.userId);
+    if (!user) {
+      return res.status(401).json({ error: 'User account not found' });
+    }
+    (req as any).user = user;
+    return next();
   }
-  (req as any).user = user;
-  next();
+
+  // 2. Check Firebase ID Token
+  const fbDecoded = await verifyFirebaseIdToken(token);
+  if (fbDecoded && fbDecoded.email) {
+    const cleanEmail = fbDecoded.email.toLowerCase().trim();
+    let user = db.getUserByEmail(cleanEmail);
+    if (!user) {
+      const isAdmin = isAdminEmail(cleanEmail);
+      const salt = generateSalt();
+      user = {
+        id: fbDecoded.uid,
+        name: fbDecoded.name || (isAdmin ? 'Vinoth (Administrator)' : 'Verified Reader'),
+        email: cleanEmail,
+        passwordHash: hashPassword(fbDecoded.uid, salt),
+        salt,
+        role: isAdmin ? 'admin' : 'customer',
+        library: isAdmin
+          ? ['book-ai-mind', 'book-wealth-playbook', 'book-deep-focus', 'book-digital-product-blueprint', 'book-systematic-thinking']
+          : ['book-digital-product-blueprint'],
+        wishlist: [],
+        createdAt: new Date().toISOString()
+      };
+      db.addUser(user);
+    }
+    (req as any).user = user;
+    (req as any).firebaseUser = fbDecoded;
+    return next();
+  }
+
+  return res.status(401).json({ error: 'Invalid or expired authentication session' });
 }
 
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
@@ -104,12 +176,19 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
   });
 }
 
-function optionalAuth(req: Request, res: Response, next: NextFunction) {
+async function optionalAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : undefined;
-  const decoded = verifyToken(token);
-  if (decoded) {
-    (req as any).user = db.getUserById(decoded.userId);
+  if (token) {
+    const decoded = verifyToken(token);
+    if (decoded) {
+      (req as any).user = db.getUserById(decoded.userId);
+    } else {
+      const fbDecoded = await verifyFirebaseIdToken(token);
+      if (fbDecoded && fbDecoded.email) {
+        (req as any).user = db.getUserByEmail(fbDecoded.email.toLowerCase().trim());
+      }
+    }
   }
   next();
 }
@@ -154,46 +233,69 @@ export function isAdminEmail(email?: string): boolean {
   );
 }
 
-// Unified Firebase Login & Session Sync
-app.post('/api/auth/firebase-login', (req: Request, res: Response) => {
-  const { email, name, uid, emailVerified } = req.body;
-  if (!email) {
-    return res.status(400).json({ error: 'Firebase email is required' });
+// Unified Firebase Login & Session Sync with Server-Side Verification
+app.post('/api/auth/firebase-login', async (req: Request, res: Response) => {
+  const { idToken, email, name, uid, emailVerified } = req.body;
+
+  let verifiedEmail = email ? email.toLowerCase().trim() : '';
+  let verifiedUid = uid || '';
+  let verifiedName = name || '';
+  let isEmailVerified = Boolean(emailVerified);
+
+  // If Firebase ID token is supplied, verify it using Firebase Admin SDK
+  if (idToken) {
+    const decoded = await verifyFirebaseIdToken(idToken);
+    if (decoded) {
+      verifiedEmail = (decoded.email || verifiedEmail).toLowerCase().trim();
+      verifiedUid = decoded.uid;
+      verifiedName = decoded.name || verifiedName;
+      isEmailVerified = Boolean(decoded.email_verified ?? isEmailVerified);
+    } else if (adminAuth && !verifiedEmail) {
+      return res.status(401).json({ error: 'Invalid or expired Firebase ID token' });
+    }
   }
 
-  const cleanEmail = email.toLowerCase().trim();
-  const isAdmin = isAdminEmail(cleanEmail);
-  let user = db.getUserByEmail(cleanEmail);
+  if (!verifiedEmail) {
+    return res.status(400).json({ error: 'A valid email address is required for authentication' });
+  }
+
+  const isAdmin = isAdminEmail(verifiedEmail);
+  let user = db.getUserByEmail(verifiedEmail);
 
   if (!user) {
     const salt = generateSalt();
     user = {
-      id: isAdmin ? 'user-admin-fb' : (uid || 'user-fb-' + Date.now()),
-      name: name || (isAdmin ? 'Vinoth (Administrator)' : 'Verified Reader'),
-      email: cleanEmail,
-      passwordHash: hashPassword(uid || 'firebase-oauth-token', salt),
+      id: verifiedUid || (isAdmin ? 'user-admin-fb' : 'user-fb-' + Date.now()),
+      name: verifiedName || (isAdmin ? 'Vinoth (Administrator)' : 'Verified Reader'),
+      email: verifiedEmail,
+      passwordHash: hashPassword(verifiedUid || 'firebase-oauth-token', salt),
       salt,
       role: isAdmin ? 'admin' : 'customer',
       library: isAdmin
         ? ['book-ai-mind', 'book-wealth-playbook', 'book-deep-focus', 'book-digital-product-blueprint', 'book-systematic-thinking']
         : ['book-digital-product-blueprint'],
       wishlist: [],
+      emailVerified: isEmailVerified,
       createdAt: new Date().toISOString()
     };
     db.addUser(user);
-    db.logActivity('USER_REGISTERED', `New account via Firebase Auth: ${cleanEmail} (${user.role})`, cleanEmail, req.ip);
+    db.logActivity('USER_REGISTERED', `New account via Firebase Auth: ${verifiedEmail} (${user.role})`, verifiedEmail, req.ip);
   } else {
     // Reconcile role if email matches authorized admin
     if (isAdmin && user.role !== 'admin') {
       user.role = 'admin';
       db.save();
     }
+    if (isEmailVerified && !user.emailVerified) {
+      user.emailVerified = true;
+      db.save();
+    }
   }
 
   db.logActivity(
     isAdmin ? 'ADMIN_SIGNIN' : 'CUSTOMER_SIGNIN',
-    `Successful Firebase authentication for ${cleanEmail}`,
-    cleanEmail,
+    `Successful Firebase authentication for ${verifiedEmail}`,
+    verifiedEmail,
     req.ip
   );
 
@@ -207,7 +309,7 @@ app.post('/api/auth/firebase-login', (req: Request, res: Response) => {
       role: user.role,
       library: user.library,
       wishlist: user.wishlist || [],
-      emailVerified: Boolean(emailVerified)
+      emailVerified: Boolean(user.emailVerified)
     }
   });
 });

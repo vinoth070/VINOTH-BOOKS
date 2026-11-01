@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { initializeApp as initAdminApp, getApps as getAdminApps } from 'firebase-admin/app';
+import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
 
 export interface Book {
   id: string;
@@ -801,6 +803,7 @@ Once purchased, books remain accessible in your account library with unlimited r
 
 class DatabaseManager {
   private data: DatabaseSchema;
+  private firestore: any = null;
 
   constructor() {
     if (!fs.existsSync(DB_DIR)) {
@@ -835,6 +838,105 @@ class DatabaseManager {
       this.data = initialSeed;
       this.save();
     }
+
+    // Initialize Cloud Firestore for Persistent Production Storage
+    this.initFirestore();
+  }
+
+  private initFirestore() {
+    try {
+      let fbProjectId = process.env.FIREBASE_PROJECT_ID;
+      let databaseId = process.env.FIRESTORE_DATABASE_ID;
+      const configPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
+      if (fs.existsSync(configPath)) {
+        const raw = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        fbProjectId = fbProjectId || raw.projectId;
+        databaseId = databaseId || raw.firestoreDatabaseId;
+      }
+
+      if (fbProjectId) {
+        const adminApp = getAdminApps().length === 0
+          ? initAdminApp({ projectId: fbProjectId })
+          : getAdminApps()[0];
+
+        if (databaseId) {
+          this.firestore = getAdminFirestore(adminApp, databaseId);
+        } else {
+          this.firestore = getAdminFirestore(adminApp);
+        }
+        console.log(`[Firestore Database] Initialized persistent storage on database: ${databaseId || 'default'}`);
+        this.hydrateFromFirestore();
+      }
+    } catch (err: any) {
+      console.warn('[Firestore Database] Initialization note:', err.message);
+    }
+  }
+
+  private async hydrateFromFirestore() {
+    if (!this.firestore) return;
+    try {
+      const [usersSnap, booksSnap, ordersSnap] = await Promise.allSettled([
+        this.firestore.collection('users').get(),
+        this.firestore.collection('books').get(),
+        this.firestore.collection('orders').get()
+      ]);
+
+      if (usersSnap.status === 'fulfilled' && !usersSnap.value.empty) {
+        usersSnap.value.forEach((doc: any) => {
+          const u = doc.data() as User;
+          const idx = this.data.users.findIndex(x => x.id === u.id || x.email.toLowerCase() === u.email.toLowerCase());
+          if (idx !== -1) {
+            this.data.users[idx] = { ...this.data.users[idx], ...u };
+          } else {
+            this.data.users.push(u);
+          }
+        });
+      }
+
+      if (booksSnap.status === 'fulfilled' && !booksSnap.value.empty) {
+        booksSnap.value.forEach((doc: any) => {
+          const b = doc.data() as Book;
+          const idx = this.data.books.findIndex(x => x.id === b.id);
+          if (idx !== -1) {
+            this.data.books[idx] = { ...this.data.books[idx], ...b };
+          } else {
+            this.data.books.push(b);
+          }
+        });
+      }
+
+      if (ordersSnap.status === 'fulfilled' && !ordersSnap.value.empty) {
+        ordersSnap.value.forEach((doc: any) => {
+          const o = doc.data() as Order;
+          const idx = this.data.orders.findIndex(x => x.id === o.id);
+          if (idx !== -1) {
+            this.data.orders[idx] = { ...this.data.orders[idx], ...o };
+          } else {
+            this.data.orders.push(o);
+          }
+        });
+      }
+    } catch (err: any) {
+      console.warn('[Firestore Database] Hydration note:', err.message);
+    }
+  }
+
+  public async syncDoc(collection: string, id: string, doc: any) {
+    if (!this.firestore) return;
+    try {
+      await this.firestore.collection(collection).doc(id).set(doc, { merge: true });
+    } catch (e: any) {
+      console.warn(`[Firestore] Failed to persist ${collection}/${id}:`, e.message);
+    }
+  }
+
+  public async deleteDoc(collection: string, id: string) {
+    if (!this.firestore) return;
+    try {
+      await this.firestore.collection(collection).doc(id).delete();
+    } catch (e: any) {
+      console.warn(`[Firestore] Failed to delete ${collection}/${id}:`, e.message);
+    }
   }
 
   public save() {
@@ -856,6 +958,7 @@ class DatabaseManager {
   public addBook(book: Book) {
     this.data.books.unshift(book);
     this.save();
+    this.syncDoc('books', book.id, book);
   }
 
   public updateBook(id: string, updates: Partial<Book>): Book | null {
@@ -863,6 +966,7 @@ class DatabaseManager {
     if (idx === -1) return null;
     this.data.books[idx] = { ...this.data.books[idx], ...updates, updatedAt: new Date().toISOString() };
     this.save();
+    this.syncDoc('books', id, this.data.books[idx]);
     return this.data.books[idx];
   }
 
@@ -871,6 +975,7 @@ class DatabaseManager {
     this.data.books = this.data.books.filter(b => b.id !== id);
     if (this.data.books.length !== prevLen) {
       this.save();
+      this.deleteDoc('books', id);
       return true;
     }
     return false;
@@ -886,6 +991,7 @@ class DatabaseManager {
   public addCategory(cat: Category) {
     this.data.categories.push(cat);
     this.save();
+    this.syncDoc('categories', cat.id, cat);
   }
 
   public updateCategory(id: string, updates: Partial<Category>): Category | null {
@@ -893,6 +999,7 @@ class DatabaseManager {
     if (idx === -1) return null;
     this.data.categories[idx] = { ...this.data.categories[idx], ...updates };
     this.save();
+    this.syncDoc('categories', id, this.data.categories[idx]);
     return this.data.categories[idx];
   }
 
@@ -901,6 +1008,7 @@ class DatabaseManager {
     this.data.categories = this.data.categories.filter(c => c.id !== id);
     if (this.data.categories.length !== prev) {
       this.save();
+      this.deleteDoc('categories', id);
       return true;
     }
     return false;
@@ -926,6 +1034,7 @@ class DatabaseManager {
     if (!user.wishlist) user.wishlist = [];
     this.data.users.push(user);
     this.save();
+    this.syncDoc('users', user.id, user);
   }
 
   public toggleWishlist(userId: string, bookId: string): string[] {
@@ -938,6 +1047,7 @@ class DatabaseManager {
       user.wishlist.push(bookId);
     }
     this.save();
+    this.syncDoc('users', user.id, user);
     return user.wishlist;
   }
 
@@ -946,6 +1056,7 @@ class DatabaseManager {
     if (user && !user.library.includes(bookId)) {
       user.library.push(bookId);
       this.save();
+      this.syncDoc('users', user.id, user);
     }
   }
 
@@ -961,6 +1072,7 @@ class DatabaseManager {
       updatedAt: new Date().toISOString()
     };
     this.save();
+    this.syncDoc('users', id, this.data.users[idx]);
     return this.data.users[idx];
   }
 
@@ -969,6 +1081,7 @@ class DatabaseManager {
     this.data.users = this.data.users.filter(u => u.id !== id);
     if (this.data.users.length !== prevLen) {
       this.save();
+      this.deleteDoc('users', id);
       return true;
     }
     return false;
@@ -984,9 +1097,11 @@ class DatabaseManager {
       const book = this.data.books.find(b => b.id === item.bookId);
       if (book) {
         book.salesCount = (book.salesCount || 0) + 1;
+        this.syncDoc('books', book.id, book);
       }
     }
     this.save();
+    this.syncDoc('orders', order.id, order);
   }
 
   public updateOrderStatus(
@@ -1016,6 +1131,7 @@ class DatabaseManager {
         }
       }
       this.save();
+      this.syncDoc('orders', order.id, order);
     }
   }
 
@@ -1034,8 +1150,10 @@ class DatabaseManager {
       const sum = bookReviews.reduce((acc, r) => acc + r.rating, 0);
       book.rating = parseFloat((sum / bookReviews.length).toFixed(2));
       book.reviewCount = bookReviews.length;
+      this.syncDoc('books', book.id, book);
     }
     this.save();
+    this.syncDoc('reviews', review.id, review);
   }
 
   public updateReviewStatus(reviewId: string, status: 'approved' | 'pending' | 'hidden') {
@@ -1043,12 +1161,14 @@ class DatabaseManager {
     if (rev) {
       rev.status = status;
       this.save();
+      this.syncDoc('reviews', rev.id, rev);
     }
   }
 
   public deleteReview(reviewId: string) {
     this.data.reviews = this.data.reviews.filter(r => r.id !== reviewId);
     this.save();
+    this.deleteDoc('reviews', reviewId);
   }
 
   // Customer Feedback
@@ -1064,6 +1184,7 @@ class DatabaseManager {
     if (!this.data.feedbacks) this.data.feedbacks = [];
     this.data.feedbacks.unshift(feedback);
     this.save();
+    this.syncDoc('feedbacks', feedback.id, feedback);
   }
 
   public addReplyToFeedback(feedbackId: string, reply: FeedbackReply): CustomerFeedback | null {
@@ -1073,6 +1194,7 @@ class DatabaseManager {
     fb.status = 'replied';
     fb.updatedAt = new Date().toISOString();
     this.save();
+    this.syncDoc('feedbacks', fb.id, fb);
     return fb;
   }
 
@@ -1085,6 +1207,7 @@ class DatabaseManager {
     rep.updatedAt = new Date().toISOString();
     fb.updatedAt = new Date().toISOString();
     this.save();
+    this.syncDoc('feedbacks', fb.id, fb);
     return fb;
   }
 
@@ -1094,6 +1217,7 @@ class DatabaseManager {
     fb.status = status;
     fb.updatedAt = new Date().toISOString();
     this.save();
+    this.syncDoc('feedbacks', fb.id, fb);
     return fb;
   }
 
@@ -1102,6 +1226,7 @@ class DatabaseManager {
     this.data.feedbacks = this.data.feedbacks.filter(f => f.id !== feedbackId);
     if (this.data.feedbacks.length !== prev) {
       this.save();
+      this.deleteDoc('feedbacks', feedbackId);
       return true;
     }
     return false;
@@ -1119,6 +1244,7 @@ class DatabaseManager {
       updatedAt: new Date().toISOString()
     };
     this.save();
+    this.syncDoc('settings', 'payment', this.data.paymentSettings);
     return this.data.paymentSettings;
   }
 
@@ -1151,6 +1277,7 @@ class DatabaseManager {
       ...settings
     };
     this.save();
+    this.syncDoc('settings', 'website', this.data.websiteSettings);
     return this.data.websiteSettings;
   }
 
@@ -1165,6 +1292,7 @@ class DatabaseManager {
   public addCoupon(coupon: Coupon) {
     this.data.coupons.push(coupon);
     this.save();
+    this.syncDoc('coupons', coupon.id, coupon);
   }
 
   public updateCoupon(id: string, updates: Partial<Coupon>): Coupon | null {
@@ -1172,12 +1300,14 @@ class DatabaseManager {
     if (idx === -1) return null;
     this.data.coupons[idx] = { ...this.data.coupons[idx], ...updates };
     this.save();
+    this.syncDoc('coupons', id, this.data.coupons[idx]);
     return this.data.coupons[idx];
   }
 
   public deleteCoupon(id: string) {
     this.data.coupons = this.data.coupons.filter(c => c.id !== id);
     this.save();
+    this.deleteDoc('coupons', id);
   }
 
   public getLegalPages(): LegalPages {
@@ -1187,18 +1317,21 @@ class DatabaseManager {
   public updateLegalPages(pages: Partial<LegalPages>) {
     this.data.legalPages = { ...this.data.legalPages, ...pages };
     this.save();
+    this.syncDoc('settings', 'legalPages', this.data.legalPages);
     return this.data.legalPages;
   }
 
   public addNewsletterSubscriber(email: string) {
     const exists = this.data.newsletter.some(s => s.email.toLowerCase() === email.toLowerCase());
     if (!exists) {
-      this.data.newsletter.unshift({
+      const sub = {
         id: 'sub-' + Date.now(),
         email,
         subscribedAt: new Date().toISOString()
-      });
+      };
+      this.data.newsletter.unshift(sub);
       this.save();
+      this.syncDoc('newsletter', sub.id, sub);
     }
   }
 
@@ -1226,6 +1359,7 @@ class DatabaseManager {
       this.data.activityLogs = this.data.activityLogs.slice(0, 200);
     }
     this.save();
+    this.syncDoc('activityLogs', entry.id, entry);
     return entry;
   }
 }
