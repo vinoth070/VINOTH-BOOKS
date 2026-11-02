@@ -57,8 +57,26 @@ export function saveReadingProgress(
         detail: { userId: userId || 'guest', bookId, progress }
       }));
     }
+
+    // Persist to Firestore user profile metadata if authenticated
+    if (userId && userId !== 'guest') {
+      import('../firebase').then(({ db, doc, setDoc }) => {
+        setDoc(
+          doc(db, 'users', userId),
+          {
+            reading_progress: {
+              [bookId]: progress
+            },
+            updatedAt: new Date().toISOString()
+          },
+          { merge: true }
+        ).catch(fsErr => {
+          console.warn('[Firestore] Reading progress sync notice:', fsErr?.message);
+        });
+      }).catch(() => {});
+    }
   } catch (err) {
-    console.warn('Unable to persist reading progress to localStorage:', err);
+    console.warn('Unable to persist reading progress:', err);
   }
 
   return progress;

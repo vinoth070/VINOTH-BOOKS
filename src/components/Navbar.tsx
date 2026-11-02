@@ -195,8 +195,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* ======================================================== */}
           <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             
-            {/* ACTION 1: Persistent Real-Time Search */}
-            <div className="relative" ref={searchRef}>
+            {/* ACTION 1: Persistent Real-Time Search (Desktop: Top Bar, Mobile: in Hamburger Drawer) */}
+            <div className="relative hidden md:block" ref={searchRef}>
               <button
                 type="button"
                 onClick={() => setSearchOpen(!searchOpen)}
@@ -327,8 +327,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </div>
 
-            {/* ACTION 2: 30-Language Selector Dropdown */}
-            <div className="relative" ref={langRef}>
+            {/* ACTION 2: 30-Language Selector Dropdown (Desktop: Top Bar, Mobile: in Hamburger Drawer) */}
+            <div className="relative hidden md:block" ref={langRef}>
               <button
                 type="button"
                 onClick={() => setLangDropdownOpen(!langDropdownOpen)}
@@ -399,7 +399,23 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </div>
 
-            {/* ACTION 3: Shopping Cart Button */}
+            {/* ACTION 3: Favorites / Wishlist Button (Desktop: Top Bar, Mobile: in Hamburger Drawer) */}
+            <button
+              type="button"
+              onClick={() => onNavigate('wishlist')}
+              className="relative hidden md:flex p-2 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] border border-transparent hover:border-[var(--border-subtle)] transition-colors cursor-pointer items-center justify-center"
+              title={t('nav.wishlist', 'Wishlist / Favorites')}
+              aria-label="Wishlist / Favorites"
+            >
+              <Heart className={`w-5 h-5 transition-transform active:scale-90 ${wishlistCount > 0 ? 'fill-red-500 text-red-500' : 'text-[var(--text-primary)]'}`} />
+              {wishlistCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center tabular-nums shadow-xs animate-in zoom-in-50">
+                  {wishlistCount}
+                </span>
+              )}
+            </button>
+
+            {/* ACTION 4: Shopping Cart Button */}
             <button
               type="button"
               onClick={() => setIsCartOpen(true)}
@@ -411,22 +427,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               {cartCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-[var(--accent-gold)] text-[#0B1325] text-[10px] font-bold rounded-full flex items-center justify-center tabular-nums shadow-xs animate-in zoom-in-50">
                   {cartCount}
-                </span>
-              )}
-            </button>
-
-            {/* ACTION 4: Favorites / Wishlist Button */}
-            <button
-              type="button"
-              onClick={() => onNavigate('wishlist')}
-              className="relative p-2 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] border border-transparent hover:border-[var(--border-subtle)] transition-colors cursor-pointer"
-              title={t('nav.wishlist', 'Wishlist / Favorites')}
-              aria-label="Wishlist / Favorites"
-            >
-              <Heart className={`w-5 h-5 transition-transform active:scale-90 ${wishlistCount > 0 ? 'fill-red-500 text-red-500' : 'text-[var(--text-primary)]'}`} />
-              {wishlistCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center tabular-nums shadow-xs animate-in zoom-in-50">
-                  {wishlistCount}
                 </span>
               )}
             </button>
@@ -472,6 +472,64 @@ export const Navbar: React.FC<NavbarProps> = ({
                 >
                   <X className="w-5 h-5" />
                 </button>
+              </div>
+
+              {/* Mobile Quick Search Bar (Prominent in Hamburger Drawer) */}
+              <div className="p-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)]/60">
+                <div className="relative flex items-center">
+                  <Search className="absolute left-3 w-4 h-4 text-[var(--text-muted)] pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search books, authors, categories..."
+                    className="w-full pl-9 pr-8 py-2 bg-[var(--bg-surface)] border border-[var(--border-subtle)] focus:border-[var(--accent-gold)] rounded-xl text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Instant Live Search Results in Drawer */}
+                {searchQuery && (
+                  <div className="mt-2 space-y-1 max-h-52 overflow-y-auto pr-1">
+                    {searchResults.length > 0 ? (
+                      searchResults.map((book) => (
+                        <div
+                          key={book.id}
+                          onClick={() => {
+                            setWorkspaceOpen(false);
+                            handleBookClick(book);
+                          }}
+                          className="flex items-center gap-2.5 p-2 bg-[var(--bg-surface)] hover:bg-[var(--accent-gold-muted)] border border-[var(--border-subtle)] rounded-xl cursor-pointer transition-colors"
+                        >
+                          <img
+                            src={resolveBookCover(book.coverImage)}
+                            alt=""
+                            className="w-8 h-11 object-cover rounded shrink-0 bg-slate-900"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-[var(--text-primary)] truncate">{book.title}</p>
+                            <p className="text-[10px] text-[var(--text-muted)] truncate">{book.author}</p>
+                            <span className="text-[10px] font-bold text-[var(--accent-gold)]">
+                              {book.isFree ? 'FREE' : formatPrice(book.sellingPrice)}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-[11px] text-[var(--text-muted)] text-center py-2">
+                        No books matching "{searchQuery}"
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Reader Account / Authentication Status Card */}
@@ -565,6 +623,42 @@ export const Navbar: React.FC<NavbarProps> = ({
                   }`}
                 >
                   <span>{t('nav.categories', 'Categories')}</span>
+                </button>
+
+                {/* Wishlist in Drawer */}
+                <button
+                  type="button"
+                  onClick={() => handleWorkspaceNavigate('wishlist')}
+                  className={`w-full text-left px-4 py-2.5 flex items-center justify-between text-xs font-medium transition-colors cursor-pointer ${
+                    currentView === 'wishlist'
+                      ? 'bg-[var(--accent-gold-muted)] text-[var(--accent-gold)] font-bold'
+                      : 'text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)]'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <Heart className={`w-3.5 h-3.5 ${wishlistCount > 0 ? 'fill-red-500 text-red-500' : 'text-[var(--text-muted)]'}`} />
+                    <span>{t('nav.wishlist', 'Wishlist / Favorites')}</span>
+                  </span>
+                  {wishlistCount > 0 && (
+                    <span className="text-[10px] bg-red-500 text-white font-bold px-2 py-0.5 rounded-full">
+                      {wishlistCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Language in Drawer */}
+                <button
+                  type="button"
+                  onClick={() => handleWorkspaceNavigate('settings', { tab: 'language' })}
+                  className="w-full text-left px-4 py-2.5 flex items-center justify-between text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] transition-colors cursor-pointer"
+                >
+                  <span className="flex items-center gap-2">
+                    <Globe className="w-3.5 h-3.5 text-[var(--accent-gold)]" />
+                    <span>{t('nav.language', 'Language')}</span>
+                  </span>
+                  <span className="text-[10px] font-bold text-[var(--accent-gold)] uppercase bg-[var(--accent-gold-muted)] px-2 py-0.5 rounded">
+                    {language} ({currentLangObj.nativeName})
+                  </span>
                 </button>
 
                 <button

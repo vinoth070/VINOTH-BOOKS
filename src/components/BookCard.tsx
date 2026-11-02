@@ -4,7 +4,7 @@ import { Book } from '../types';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
-import { resolveBookCover } from '../utils/imageUrl';
+import { resolveBookCover, handleBookCoverError } from '../utils/imageUrl';
 
 interface BookCardProps {
   book: Book;
@@ -50,9 +50,7 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onSelect, onOpenReader
             referrerPolicy="no-referrer"
             loading="lazy"
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-            onError={(e) => {
-              (e.currentTarget as HTMLElement).style.display = 'none';
-            }}
+            onError={handleBookCoverError}
           />
 
           {/* Foil Reflection Sheen on Hover */}

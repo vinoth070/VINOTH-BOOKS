@@ -59,6 +59,14 @@ export interface User {
     orderAlerts?: boolean;
     newsletter?: boolean;
   };
+  reading_progress?: Record<string, {
+    bookId?: string;
+    chapterIndex: number;
+    totalChapters?: number;
+    percent: number;
+    chapterTitle?: string;
+    updatedAt: string;
+  }>;
   createdAt?: string;
   updatedAt?: string;
 }

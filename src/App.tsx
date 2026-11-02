@@ -28,7 +28,7 @@ import { apiClient, getApiUrl } from './services/apiClient';
 import { FALLBACK_BOOKS, FALLBACK_CATEGORIES } from './data/fallbackData';
 
 function MainApp() {
-  const { user, token, logout, isAdmin } = useAuth();
+  const { user, token, logout, isAdmin, isLoading: isAuthLoading } = useAuth();
   const { t } = useI18n();
 
   const [currentView, setCurrentView] = useState<string>('home');
@@ -58,9 +58,13 @@ function MainApp() {
         customBooks = JSON.parse(localStorage.getItem('vb_custom_books') || '[]');
       } catch {}
 
-      if (resBooks.status === 'fulfilled' && Array.isArray(resBooks.value?.books) && resBooks.value.books.length > 0) {
+      const isPurged = localStorage.getItem('vb_demo_purged') === 'true';
+
+      if (resBooks.status === 'fulfilled' && Array.isArray(resBooks.value?.books)) {
         const filtered = resBooks.value.books.filter(b => !deletedIds.includes(b.id));
         setBooks([...customBooks, ...filtered]);
+      } else if (isPurged) {
+        setBooks([...customBooks]);
       } else {
         const filtered = FALLBACK_BOOKS.filter(b => !deletedIds.includes(b.id));
         setBooks([...customBooks, ...filtered]);
@@ -72,15 +76,20 @@ function MainApp() {
         setCategories(FALLBACK_CATEGORIES);
       }
     } catch (err) {
-      console.warn('Fallback to bundled catalog:', err);
+      console.warn('Fallback catalog notice:', err);
       let deletedIds: string[] = [];
       let customBooks: Book[] = [];
       try {
         deletedIds = JSON.parse(localStorage.getItem('vb_deleted_books') || '[]');
         customBooks = JSON.parse(localStorage.getItem('vb_custom_books') || '[]');
       } catch {}
-      const filtered = FALLBACK_BOOKS.filter(b => !deletedIds.includes(b.id));
-      setBooks([...customBooks, ...filtered]);
+      const isPurged = localStorage.getItem('vb_demo_purged') === 'true';
+      if (isPurged) {
+        setBooks([...customBooks]);
+      } else {
+        const filtered = FALLBACK_BOOKS.filter(b => !deletedIds.includes(b.id));
+        setBooks([...customBooks, ...filtered]);
+      }
       setCategories(FALLBACK_CATEGORIES);
     } finally {
       setLoading(false);
@@ -120,10 +129,10 @@ function MainApp() {
 
   // Silent automatic redirect for non-admin users reaching admin route
   useEffect(() => {
-    if (currentView === 'admin' && user && !isAdmin) {
+    if (!isAuthLoading && currentView === 'admin' && user && !isAdmin) {
       navigateTo('home');
     }
-  }, [currentView, user, isAdmin]);
+  }, [currentView, user, isAdmin, isAuthLoading]);
 
   const navigateTo = (view: string, params: any = {}) => {
     setCurrentView(view);
@@ -221,7 +230,7 @@ https://vinoth070.github.io/VINOTH-BOOKS/
   };
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden flex flex-col bg-[var(--bg-page)] text-[var(--text-primary)] transition-colors duration-200">
+    <div className="min-h-screen w-full max-w-full overflow-x-clip flex flex-col bg-[var(--bg-page)] text-[var(--text-primary)] transition-colors duration-200">
       {/* Top Banner for Publisher Direct Guarantee */}
       <div className="bg-[var(--bg-surface-elevated)] text-[var(--accent-gold)] px-4 py-1.5 text-center text-[10px] sm:text-[11px] font-semibold tracking-wider uppercase border-b border-[var(--border-subtle)] flex items-center justify-center gap-2">
         <span>{t('hero.badge', 'Official Publishing House of Author Vinoth')} · Direct-to-Reader Delivery</span>
@@ -311,7 +320,12 @@ https://vinoth070.github.io/VINOTH-BOOKS/
         )}
 
         {currentView === 'admin' && (
-          isAdmin ? (
+          isAuthLoading ? (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+              <div className="w-8 h-8 rounded-full border-2 border-[var(--accent-gold)] border-t-transparent animate-spin" />
+              <p className="text-xs text-[var(--text-muted)] font-mono">Verifying credentials...</p>
+            </div>
+          ) : isAdmin ? (
             <ErrorBoundary fallbackTitle="Admin Workspace Recovery">
               <AdminDashboardView
                 books={books}

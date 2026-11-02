@@ -211,6 +211,7 @@ export interface DatabaseSchema {
   websiteSettings: WebsiteSettings;
   legalPages: LegalPages;
   activityLogs: ActivityLog[];
+  demoBooksPurged?: boolean;
 }
 
 const DB_DIR = path.resolve(process.cwd(), 'data');
@@ -833,6 +834,11 @@ class DatabaseManager {
           websiteSettings: parsed.websiteSettings ? { ...initialSeed.websiteSettings, ...parsed.websiteSettings } : initialSeed.websiteSettings,
           activityLogs: parsed.activityLogs?.length ? parsed.activityLogs : initialSeed.activityLogs
         };
+        // Respect demoBooksPurged flag so purged demo books never resurface
+        if (parsed.demoBooksPurged) {
+          this.data.demoBooksPurged = true;
+          this.data.books = (parsed.books || []).filter((b: Book) => b.isDemoData !== true);
+        }
         // Clean out legacy authorProfile if present
         if ((this.data as any).authorProfile) {
           delete (this.data as any).authorProfile;
@@ -884,6 +890,14 @@ class DatabaseManager {
   private async hydrateFromFirestore() {
     if (!this.firestore) return;
     try {
+      // Check catalog metadata first
+      try {
+        const metaDoc = await this.firestore.collection('settings').doc('catalog_meta').get();
+        if (metaDoc.exists && metaDoc.data()?.demoBooksPurged) {
+          this.data.demoBooksPurged = true;
+        }
+      } catch {}
+
       const [usersSnap, booksSnap, ordersSnap] = await Promise.allSettled([
         this.firestore.collection('users').get(),
         this.firestore.collection('books').get(),
@@ -902,16 +916,19 @@ class DatabaseManager {
         });
       }
 
-      if (booksSnap.status === 'fulfilled' && !booksSnap.value.empty) {
-        booksSnap.value.forEach((doc: any) => {
-          const b = doc.data() as Book;
-          const idx = this.data.books.findIndex(x => x.id === b.id);
-          if (idx !== -1) {
-            this.data.books[idx] = { ...this.data.books[idx], ...b };
-          } else {
-            this.data.books.push(b);
-          }
-        });
+      if (booksSnap.status === 'fulfilled') {
+        if (!booksSnap.value.empty) {
+          // Firestore is authoritative: adopt books from database
+          const firestoreBooks: Book[] = [];
+          booksSnap.value.forEach((doc: any) => {
+            firestoreBooks.push(doc.data() as Book);
+          });
+          this.data.books = firestoreBooks;
+          this.save();
+        } else if (this.data.demoBooksPurged) {
+          this.data.books = [];
+          this.save();
+        }
       }
 
       if (ordersSnap.status === 'fulfilled' && !ordersSnap.value.empty) {
@@ -988,6 +1005,22 @@ class DatabaseManager {
       return true;
     }
     return false;
+  }
+
+  public isDemoBooksPurged(): boolean {
+    return Boolean(this.data.demoBooksPurged);
+  }
+
+  public setDemoBooksPurged(purged: boolean) {
+    this.data.demoBooksPurged = purged;
+    if (purged) {
+      this.data.books = this.data.books.filter(b => b.isDemoData !== true);
+    }
+    this.save();
+    this.syncDoc('settings', 'catalog_meta', {
+      demoBooksPurged: purged,
+      updatedAt: new Date().toISOString()
+    });
   }
 
   public getCategories(): Category[] {

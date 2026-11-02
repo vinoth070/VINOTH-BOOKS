@@ -77,6 +77,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onSuccess }) => {
         customer?: { name: string; email: string };
       }>('/api/payment/create-order', {
         bookIds: items.map(i => i.book.id),
+        clientBooks: items.map(i => i.book),
         couponCode: appliedCoupon?.code
       });
 

@@ -25,12 +25,14 @@ export const MyLibraryView: React.FC<MyLibraryViewProps> = ({ onOpenReader, onSe
 
   useEffect(() => {
     const updateProgress = () => {
-      setProgressMap(getAllReadingProgress(user?.id));
+      const local = getAllReadingProgress(user?.id);
+      const remote = (user?.reading_progress as Record<string, ReadingProgressData>) || {};
+      setProgressMap({ ...remote, ...local });
     };
     updateProgress();
     window.addEventListener('vb-reading-progress-updated', updateProgress);
     return () => window.removeEventListener('vb-reading-progress-updated', updateProgress);
-  }, [user?.id]);
+  }, [user?.id, user?.reading_progress]);
 
   useEffect(() => {
     const fetchLibrary = async () => {
@@ -216,7 +218,11 @@ export const MyLibraryView: React.FC<MyLibraryViewProps> = ({ onOpenReader, onSe
                   className="w-full flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-bold uppercase tracking-wider bg-[var(--accent-gold)] text-[#0B1325] rounded-lg hover:bg-[var(--accent-gold-hover)] transition-colors cursor-pointer"
                 >
                   <BookOpen className="w-4 h-4" />
-                  <span>Read Online</span>
+                  <span>
+                    {(progressMap[book.id]?.percent || 0) > 0
+                      ? `Resume (${progressMap[book.id]?.percent}%)`
+                      : 'Read Online'}
+                  </span>
                 </button>
                 <button
                   type="button"

@@ -1,31 +1,78 @@
 /**
  * Production Asset and Image URL Resolution for VINOTH BOOKS
- * Ensures assets resolve correctly on GitHub Pages (/VINOTH-BOOKS/),
- * preview environments, and local dev server without 404s.
+ * Resolves correctly on:
+ * - Vercel root deployments (e.g. https://vinoth-books.vercel.app/)
+ * - GitHub Pages subpath (e.g. https://vinoth070.github.io/VINOTH-BOOKS/)
+ * - Localhost and preview environments
  */
 
-export function resolveBookCover(url?: string): string {
-  if (!url) {
-    const base = import.meta.env.BASE_URL || '/';
-    const cleanBase = base.endsWith('/') ? base : `${base}/`;
-    return `${cleanBase}assets/images/book_cover_ai_revolution_1793365303535.jpg`;
-  }
+// Permanent, high-fidelity CDN fallbacks for core publications
+export const FALLBACK_BOOK_COVERS = {
+  ai: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80',
+  focus: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80',
+  wealth: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=800&q=80',
+  default: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80'
+};
 
-  // Absolute URLs (CDN, Cloud Storage, Data URLs)
-  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:')) {
-    return url;
+export function getRuntimeBase(): string {
+  if (typeof window !== 'undefined') {
+    // If the browser URL path starts with /VINOTH-BOOKS (GitHub Pages deployment)
+    if (window.location.pathname.startsWith('/VINOTH-BOOKS')) {
+      return '/VINOTH-BOOKS/';
+    }
+    // Vercel, Netlify, custom domain or local root
+    return '/';
   }
-
   const base = import.meta.env.BASE_URL || '/';
-  const cleanBase = base.endsWith('/') ? base : `${base}/`;
+  return base.endsWith('/') ? base : `${base}/`;
+}
 
-  // Standardize relative asset paths
-  let cleanPath = url
+export function resolveBookCover(url?: string): string {
+  if (!url || !url.trim()) {
+    const base = getRuntimeBase();
+    return `${base}assets/images/book_cover_ai_revolution_1793365303535.jpg`;
+  }
+
+  const trimmed = url.trim();
+
+  // Absolute URLs (CDN, Cloud Storage, Data URLs, Blob URLs)
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('blob:')
+  ) {
+    return trimmed;
+  }
+
+  const base = getRuntimeBase();
+
+  // Standardize relative asset paths from local or bundled directories
+  const cleanPath = trimmed
+    .replace(/^\/?VINOTH-BOOKS\//, '')
     .replace(/^\/?src\/assets\//, 'assets/')
     .replace(/^\/?assets\//, 'assets/')
     .replace(/^\//, '');
 
-  return `${cleanBase}${cleanPath}`;
+  return `${base}${cleanPath}`;
+}
+
+export function handleBookCoverError(e: React.SyntheticEvent<HTMLImageElement, Event>) {
+  const target = e.currentTarget;
+  if (target.dataset.triedFallback === 'true') {
+    return;
+  }
+  target.dataset.triedFallback = 'true';
+  const src = (target.src || '').toLowerCase();
+  if (src.includes('revolution') || src.includes('ai')) {
+    target.src = FALLBACK_BOOK_COVERS.ai;
+  } else if (src.includes('focus')) {
+    target.src = FALLBACK_BOOK_COVERS.focus;
+  } else if (src.includes('wealth')) {
+    target.src = FALLBACK_BOOK_COVERS.wealth;
+  } else {
+    target.src = FALLBACK_BOOK_COVERS.default;
+  }
 }
 
 export function getDefaultAvatar(name?: string): string {

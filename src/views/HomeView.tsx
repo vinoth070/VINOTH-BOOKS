@@ -210,16 +210,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 const isRight = offset === 1;
                 const isVisible = Math.abs(offset) <= 1;
 
-                // Responsive translation amounts (valid CSS syntax)
+                // Responsive translation amounts calculated for zero mobile overflow
                 const translateX = isCenter
                   ? '0px'
                   : isRight
-                  ? 'clamp(80px, 22vw, 260px)'
-                  : 'calc(-1 * clamp(80px, 22vw, 260px))';
+                  ? 'clamp(40px, 18vw, 250px)'
+                  : 'calc(-1 * clamp(40px, 18vw, 250px))';
 
-                const rotateY = isCenter ? '0deg' : isRight ? '-28deg' : '28deg';
-                const scale = isCenter ? 1.05 : 0.8;
-                const opacity = isCenter ? 1 : isVisible ? 0.6 : 0;
+                const rotateY = isCenter ? '0deg' : isRight ? '-26deg' : '26deg';
+                const scale = isCenter ? 1.02 : 0.75;
+                const opacity = isCenter ? 1 : isVisible ? 0.5 : 0;
                 const zIndex = isCenter ? 30 : isVisible ? 20 : 10;
 
                 if (!isVisible) return null;
@@ -234,7 +234,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                         setCarouselIndex(idx);
                       }
                     }}
-                    className="absolute w-44 sm:w-64 aspect-3/4 rounded-r-xl overflow-hidden cursor-pointer transition-all duration-600 ease-out select-none"
+                    className="absolute w-36 xs:w-44 sm:w-64 aspect-3/4 rounded-r-xl overflow-hidden cursor-pointer transition-all duration-600 ease-out select-none"
                     style={{
                       transform: `translateX(${translateX}) scale(${scale}) rotateY(${rotateY})`,
                       opacity,

@@ -830,7 +830,9 @@ app.post('/api/books', requireAdmin, (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Title and category are required' });
   }
 
-  const id = 'book-' + (body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || Date.now());
+  const id = (body.id && typeof body.id === 'string' && body.id.trim())
+    ? body.id.trim()
+    : ('book-' + (body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || Date.now()));
 
   const newBook: Book = {
     id,
@@ -970,6 +972,9 @@ app.post('/api/admin/books/purge-demo', requireAdmin, (req: Request, res: Respon
     db.deleteBook(b.id);
     purgedIds.push(b.id);
   }
+
+  // Authoritatively persist purge status
+  db.setDemoBooksPurged(true);
 
   db.logActivity('PURGE_DEMO_BOOKS', `Admin safely removed ${purgedIds.length} sample/demo books from the live catalog.`, (req as any).user.email, req.ip);
   res.json({
@@ -1206,7 +1211,14 @@ app.post('/api/payment/create-order', requireAuth, async (req: Request, res: Res
   let subtotal = 0;
 
   for (const bId of bookIds) {
-    const book = allBooks.find(b => b.id === bId);
+    let book = allBooks.find(b => b.id === bId || (b as any).slug === bId);
+    if (!book && Array.isArray(req.body.clientBooks)) {
+      const clientBook = req.body.clientBooks.find((cb: any) => cb.id === bId);
+      if (clientBook) {
+        db.addBook(clientBook);
+        book = clientBook;
+      }
+    }
     if (!book) return res.status(404).json({ error: `Book ${bId} not found` });
     items.push({
       bookId: book.id,

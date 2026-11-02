@@ -152,9 +152,9 @@
   background: var(--accent-gold);
 }
 
-/* Strict Mobile Screen Overflow Protection */
+/* Strict Mobile Screen Overflow Protection with Sticky Positioning Guarantee */
 html, body {
-  overflow-x: hidden;
+  overflow-x: clip;
   max-width: 100vw;
   width: 100%;
   box-sizing: border-box;
@@ -171,4 +171,32 @@ html, body {
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* Dark Theme Form Input Visibility Guarantee */
+input, textarea, select {
+  color: inherit;
+}
+
+.dark input, 
+.dark textarea, 
+.dark select,
+[data-theme="dark"] input,
+[data-theme="dark"] textarea,
+[data-theme="dark"] select {
+  color: #FBF9F5;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder,
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: #94A3B8;
+  opacity: 1;
+}
+
+.dark option,
+[data-theme="dark"] option {
+  background-color: #0B1325;
+  color: #FBF9F5;
 }

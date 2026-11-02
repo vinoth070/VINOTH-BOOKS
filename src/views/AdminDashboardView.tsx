@@ -277,7 +277,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         console.warn('Backend API save failed or static hosting, falling back to client persistence:', apiErr);
       }
 
-      // 2. Synchronize to localStorage (vb_custom_books)
+      // 2. Direct Cloud Firestore persistence for reliable cloud catalog
+      try {
+        const { db } = await import('../firebase');
+        const { doc, setDoc } = await import('firebase/firestore');
+        await setDoc(doc(db, 'books', payload.id), payload, { merge: true });
+      } catch (fsErr) {
+        console.warn('Firestore direct write notice:', fsErr);
+      }
+
+      // 3. Synchronize to localStorage (vb_custom_books)
       try {
         const existingCustom: Book[] = JSON.parse(localStorage.getItem('vb_custom_books') || '[]');
         let updatedCustom: Book[];
@@ -357,7 +366,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         console.warn('Backend API delete failed or offline, syncing locally:', apiErr);
       }
 
-      // 2. Synchronize deleted state to localStorage
+      // 2. Direct Cloud Firestore delete
+      try {
+        const { db } = await import('../firebase');
+        const { doc, deleteDoc } = await import('firebase/firestore');
+        await deleteDoc(doc(db, 'books', bookToDelete.id));
+      } catch (fsErr) {
+        console.warn('Firestore book delete notice:', fsErr);
+      }
+
+      // 3. Synchronize deleted state to localStorage
       try {
         const deletedIds: string[] = JSON.parse(localStorage.getItem('vb_deleted_books') || '[]');
         if (!deletedIds.includes(bookToDelete.id)) {
@@ -443,15 +461,26 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         console.warn('Backend purge note, applying local cleanup:', apiErr);
       }
 
-      // 2. Mark demo books as deleted in localStorage so they don't reappear on static hostings
+      // 2. Mark demo books as permanently purged so they never reappear
+      localStorage.setItem('vb_demo_purged', 'true');
       const deletedIds: string[] = JSON.parse(localStorage.getItem('vb_deleted_books') || '[]');
       const updatedDeleted = Array.from(new Set([...deletedIds, ...demoIds]));
       localStorage.setItem('vb_deleted_books', JSON.stringify(updatedDeleted));
 
-      // 3. Clear from custom books
+      // 3. Clear from custom books and Firestore
       const customBooks: Book[] = JSON.parse(localStorage.getItem('vb_custom_books') || '[]');
       const filteredCustom = customBooks.filter((b: Book) => !demoIds.includes(b.id));
       localStorage.setItem('vb_custom_books', JSON.stringify(filteredCustom));
+
+      // Delete demo documents from Firestore if present
+      try {
+        const { db } = await import('../firebase');
+        const { doc, deleteDoc, setDoc } = await import('firebase/firestore');
+        await Promise.allSettled(demoIds.map(dId => deleteDoc(doc(db, 'books', dId))));
+        await setDoc(doc(db, 'settings', 'catalog_meta'), { demoBooksPurged: true, purgedAt: new Date().toISOString() }, { merge: true });
+      } catch (fsErr) {
+        console.warn('Firestore purge sync notice:', fsErr);
+      }
 
       showNotification('success', `Successfully removed ${demoIds.length} sample/demo books! Catalog is ready for your original works.`);
       setIsPurgeModalOpen(false);
