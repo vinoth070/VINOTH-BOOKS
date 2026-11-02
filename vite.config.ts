@@ -4,11 +4,14 @@ import path from 'path';
 import { defineConfig } from 'vite';
 
 export default defineConfig(() => {
-return {
-base: '/VINOTH-BOOKS/',
+  // Support both Vercel (root '/') and GitHub Pages ('/VINOTH-BOOKS/') dynamically
+  const isVercel = Boolean(process.env.VERCEL || process.env.NOW_BUILDER);
+  const isGitHubPages = process.env.GITHUB_PAGES === 'true' || process.env.DEPLOY_TARGET === 'gh-pages';
+  const basePath = process.env.VITE_BASE_PATH || (isVercel ? '/' : (isGitHubPages ? '/VINOTH-BOOKS/' : '/'));
 
-
-plugins: [react(), tailwindcss()],
+  return {
+    base: basePath,
+    plugins: [react(), tailwindcss()],
 
 resolve: {
   alias: {

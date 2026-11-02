@@ -1,8 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { initializeApp as initAdminApp, getApps as getAdminApps } from 'firebase-admin/app';
+import dotenv from 'dotenv';
+import { initializeApp as initAdminApp, getApps as getAdminApps, cert } from 'firebase-admin/app';
 import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
+
+dotenv.config();
 
 export interface Book {
   id: string;
@@ -851,30 +854,65 @@ class DatabaseManager {
 
   private initFirestore() {
     try {
+      let serviceAccount: any = null;
+      const rawKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.FIREBASE_SERVICE_ACCOUNT;
+      if (rawKey) {
+        try {
+          const decoded = rawKey.startsWith('{') ? rawKey : Buffer.from(rawKey, 'base64').toString('utf-8');
+          serviceAccount = JSON.parse(decoded);
+        } catch (parseErr) {
+          console.warn('[Firestore Database] Could not parse FIREBASE_SERVICE_ACCOUNT_KEY:', parseErr);
+        }
+      }
+
       let fbProjectId = process.env.FIREBASE_PROJECT_ID;
       let databaseId = process.env.FIRESTORE_DATABASE_ID;
       const configPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
       if (fs.existsSync(configPath)) {
-        const raw = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-        fbProjectId = fbProjectId || raw.projectId;
-        databaseId = databaseId || raw.firestoreDatabaseId;
+        try {
+          const raw = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+          fbProjectId = fbProjectId || raw.projectId;
+          databaseId = databaseId || raw.firestoreDatabaseId;
+        } catch {}
       }
 
-      if (fbProjectId) {
-        const adminApp = getAdminApps().length === 0
-          ? initAdminApp({ projectId: fbProjectId })
-          : getAdminApps()[0];
-
-        if (databaseId) {
-          this.firestore = getAdminFirestore(adminApp, databaseId);
-        } else {
-          this.firestore = getAdminFirestore(adminApp);
+      let adminApp = getAdminApps().length > 0 ? getAdminApps()[0] : null;
+      if (!adminApp && (serviceAccount || fbProjectId)) {
+        try {
+          if (serviceAccount) {
+            adminApp = initAdminApp({
+              credential: cert(serviceAccount),
+              projectId: serviceAccount.project_id || fbProjectId
+            });
+            console.log(`[Firestore Database] Initialized with Service Account: ${serviceAccount.client_email}`);
+          } else if (fbProjectId) {
+            adminApp = initAdminApp({ projectId: fbProjectId });
+            console.log(`[Firestore Database] Initialized with project ID: ${fbProjectId}`);
+          }
+        } catch (initErr: any) {
+          console.warn('[Firestore Database] Admin app init note:', initErr.message);
         }
-        console.log(`[Firestore Database] Initialized persistent storage on database: ${databaseId || 'default'}`);
-        this.hydrateFromFirestore();
+      }
+
+      if (adminApp) {
+        try {
+          if (databaseId) {
+            this.firestore = getAdminFirestore(adminApp, databaseId);
+          } else {
+            this.firestore = getAdminFirestore(adminApp);
+          }
+          console.log(`[Firestore Database] Initialized persistent storage on database: ${databaseId || 'default'}`);
+          this.hydrateFromFirestore().catch(e => {
+            console.warn('[Firestore Database] Hydration note:', e.message);
+          });
+        } catch (fsErr: any) {
+          console.warn('[Firestore Database] Firestore instance note (using local store):', fsErr.message);
+        }
+      } else {
+        console.log('[Firestore Database] Operating with resilient local JSON store.');
       }
     } catch (err: any) {
-      console.warn('[Firestore Database] Initialization note:', err.message);
+      console.warn('[Firestore Database] Initialization note (resilient local store active):', err.message);
     }
   }
 

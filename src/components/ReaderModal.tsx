@@ -4,6 +4,7 @@ import { Book } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../services/apiClient';
 import { FALLBACK_BOOKS } from '../data/fallbackData';
+import { saveReadingProgress, getReadingProgress } from '../utils/readingProgress';
 
 interface ReaderModalProps {
   bookId: string;
@@ -24,26 +25,45 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({ bookId, onClose }) => 
     const fetchReaderContent = async () => {
       try {
         setLoading(true);
-        const data = await apiClient.get<{ book: Book }>(`/api/library/read/${bookId}`);
-        if (data?.book) {
-          setBook(data.book);
+        let loadedBook: Book | null = null;
+        try {
+          const data = await apiClient.get<{ book: Book }>(`/api/library/read/${bookId}`);
+          if (data?.book) loadedBook = data.book;
+        } catch {
+          // fallback
+        }
+
+        if (!loadedBook) {
+          const fallback = FALLBACK_BOOKS.find(b => b.id === bookId);
+          if (fallback) loadedBook = fallback;
+        }
+
+        if (loadedBook) {
+          setBook(loadedBook);
+          // Restore user's saved reading progress
+          const saved = getReadingProgress(user?.id, bookId);
+          if (saved && saved.chapterIndex >= 0 && saved.chapterIndex < (loadedBook.sampleContent?.length || 1)) {
+            setCurrentChapterIndex(saved.chapterIndex);
+          }
         } else {
-          throw new Error('Book not found');
+          setError('Book content is currently unavailable.');
         }
       } catch (err: any) {
-        // Fallback to bundled book sample content
-        const fallback = FALLBACK_BOOKS.find(b => b.id === bookId);
-        if (fallback) {
-          setBook(fallback);
-        } else {
-          setError(err.message || 'Error loading reader content');
-        }
+        setError(err.message || 'Error loading reader content');
       } finally {
         setLoading(false);
       }
     };
     fetchReaderContent();
-  }, [bookId, token]);
+  }, [bookId, token, user?.id]);
+
+  // Persist reading progress whenever currentChapterIndex changes
+  useEffect(() => {
+    if (book && book.sampleContent?.length > 0) {
+      const title = book.sampleContent[currentChapterIndex]?.chapterTitle;
+      saveReadingProgress(user?.id, bookId, currentChapterIndex, book.sampleContent.length, title);
+    }
+  }, [book, currentChapterIndex, bookId, user?.id]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -95,7 +115,7 @@ export const ReaderModal: React.FC<ReaderModalProps> = ({ bookId, onClose }) => 
               {book ? book.title : 'Loading Digital Book...'}
             </h2>
             <p className="text-xs opacity-75 truncate">
-              {book ? `By ${book.author} · Chapter ${currentChapterIndex + 1} of ${book.sampleContent?.length || 1}` : 'Preparing reader...'}
+              {book ? `By ${book.author} · Chapter ${currentChapterIndex + 1} of ${book.sampleContent?.length || 1} (${progressPercent}% read)` : 'Preparing reader...'}
             </p>
           </div>
         </div>

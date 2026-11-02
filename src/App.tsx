@@ -42,7 +42,7 @@ function MainApp() {
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [readerBookId, setReaderBookId] = useState<string | null>(null);
 
-  // Fetch initial books and categories
+  // Fetch initial books and categories with resilient local persistence
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -51,10 +51,19 @@ function MainApp() {
         apiClient.get<{ categories: Category[] }>('/api/categories')
       ]);
 
+      let deletedIds: string[] = [];
+      let customBooks: Book[] = [];
+      try {
+        deletedIds = JSON.parse(localStorage.getItem('vb_deleted_books') || '[]');
+        customBooks = JSON.parse(localStorage.getItem('vb_custom_books') || '[]');
+      } catch {}
+
       if (resBooks.status === 'fulfilled' && Array.isArray(resBooks.value?.books) && resBooks.value.books.length > 0) {
-        setBooks(resBooks.value.books);
+        const filtered = resBooks.value.books.filter(b => !deletedIds.includes(b.id));
+        setBooks([...customBooks, ...filtered]);
       } else {
-        setBooks(FALLBACK_BOOKS);
+        const filtered = FALLBACK_BOOKS.filter(b => !deletedIds.includes(b.id));
+        setBooks([...customBooks, ...filtered]);
       }
 
       if (resCats.status === 'fulfilled' && Array.isArray(resCats.value?.categories) && resCats.value.categories.length > 0) {
@@ -64,7 +73,14 @@ function MainApp() {
       }
     } catch (err) {
       console.warn('Fallback to bundled catalog:', err);
-      setBooks(FALLBACK_BOOKS);
+      let deletedIds: string[] = [];
+      let customBooks: Book[] = [];
+      try {
+        deletedIds = JSON.parse(localStorage.getItem('vb_deleted_books') || '[]');
+        customBooks = JSON.parse(localStorage.getItem('vb_custom_books') || '[]');
+      } catch {}
+      const filtered = FALLBACK_BOOKS.filter(b => !deletedIds.includes(b.id));
+      setBooks([...customBooks, ...filtered]);
       setCategories(FALLBACK_CATEGORIES);
     } finally {
       setLoading(false);
@@ -217,6 +233,8 @@ https://vinoth070.github.io/VINOTH-BOOKS/
         onNavigate={navigateTo}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onOpenFeedback={() => setIsFeedbackOpen(true)}
+        books={books}
+        onSelectBook={handleSelectBook}
       />
 
       {/* Main Content Area */}

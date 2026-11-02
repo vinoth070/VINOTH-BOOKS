@@ -8,6 +8,8 @@
  * - Meaningful error messages for network outages, HTML 404 fallbacks, and server failures
  */
 
+import { auth } from '../firebase';
+
 export class ApiError extends Error {
   status: number;
   data?: any;
@@ -71,7 +73,19 @@ export async function request<T = any>(endpoint: string, options: RequestOptions
 
   // Inject token if available and not explicitly skipped
   if (!options.skipAuth && !headers.has('Authorization')) {
-    const token = localStorage.getItem('vb_token');
+    let token = localStorage.getItem('vb_token');
+    // If token is missing or a client-fallback token (fb_...), fetch real Firebase ID token if user is signed in
+    if ((!token || token.startsWith('fb_')) && auth.currentUser) {
+      try {
+        const idToken = await auth.currentUser.getIdToken();
+        if (idToken) {
+          token = idToken;
+          localStorage.setItem('vb_token', idToken);
+        }
+      } catch {
+        // silent fallback
+      }
+    }
     if (token) {
       headers.set('Authorization', `Bearer ${token}`);
     }

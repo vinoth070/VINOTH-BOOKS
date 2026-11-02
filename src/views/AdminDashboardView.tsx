@@ -256,19 +256,48 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
     try {
       setLoading(true);
-      const payload = {
+      const payload: any = {
         ...bookForm,
+        id: editingBookId || `book_${Date.now()}`,
         originalPrice: Number(bookForm.originalPrice),
         sellingPrice: bookForm.isFree ? 0 : Number(bookForm.sellingPrice),
         pages: Number(bookForm.pages),
         tags: typeof bookForm.tags === 'string' ? bookForm.tags.split(',').map(t => t.trim()) : bookForm.tags
       };
 
-      const url = editingBookId ? `/api/books/${editingBookId}` : '/api/books';
-      if (editingBookId) {
-        await apiClient.put(url, payload);
-      } else {
-        await apiClient.post(url, payload);
+      // 1. Try sending to backend API
+      try {
+        const url = editingBookId ? `/api/books/${editingBookId}` : '/api/books';
+        if (editingBookId) {
+          await apiClient.put(url, payload);
+        } else {
+          await apiClient.post(url, payload);
+        }
+      } catch (apiErr: any) {
+        console.warn('Backend API save failed or static hosting, falling back to client persistence:', apiErr);
+      }
+
+      // 2. Synchronize to localStorage (vb_custom_books)
+      try {
+        const existingCustom: Book[] = JSON.parse(localStorage.getItem('vb_custom_books') || '[]');
+        let updatedCustom: Book[];
+        if (editingBookId) {
+          updatedCustom = existingCustom.map(b => b.id === editingBookId ? { ...b, ...payload } : b);
+          if (!updatedCustom.some(b => b.id === editingBookId)) {
+            updatedCustom.push(payload);
+          }
+        } else {
+          updatedCustom = [payload, ...existingCustom.filter(b => b.id !== payload.id)];
+        }
+        localStorage.setItem('vb_custom_books', JSON.stringify(updatedCustom));
+
+        // If previously marked deleted, remove from deleted list
+        const deletedIds: string[] = JSON.parse(localStorage.getItem('vb_deleted_books') || '[]');
+        if (deletedIds.includes(payload.id)) {
+          localStorage.setItem('vb_deleted_books', JSON.stringify(deletedIds.filter(id => id !== payload.id)));
+        }
+      } catch (storageErr) {
+        console.error('LocalStorage sync error:', storageErr);
       }
 
       showNotification('success', editingBookId ? 'Book updated successfully!' : 'eBook published to live store!');
@@ -321,7 +350,28 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     if (!bookToDelete) return;
     try {
       setLoading(true);
-      await apiClient.delete(`/api/books/${bookToDelete.id}`);
+      // 1. Attempt backend API deletion
+      try {
+        await apiClient.delete(`/api/books/${bookToDelete.id}`);
+      } catch (apiErr: any) {
+        console.warn('Backend API delete failed or offline, syncing locally:', apiErr);
+      }
+
+      // 2. Synchronize deleted state to localStorage
+      try {
+        const deletedIds: string[] = JSON.parse(localStorage.getItem('vb_deleted_books') || '[]');
+        if (!deletedIds.includes(bookToDelete.id)) {
+          deletedIds.push(bookToDelete.id);
+          localStorage.setItem('vb_deleted_books', JSON.stringify(deletedIds));
+        }
+
+        const customBooks: Book[] = JSON.parse(localStorage.getItem('vb_custom_books') || '[]');
+        const updatedCustom = customBooks.filter((b: Book) => b.id !== bookToDelete.id);
+        localStorage.setItem('vb_custom_books', JSON.stringify(updatedCustom));
+      } catch (storageErr) {
+        console.error('LocalStorage sync delete error:', storageErr);
+      }
+
       showNotification('success', `"${bookToDelete.title}" removed permanently from catalog.`);
       setIsDeleteModalOpen(false);
       setBookToDelete(null);

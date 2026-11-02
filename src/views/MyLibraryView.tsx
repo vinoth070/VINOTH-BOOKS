@@ -6,6 +6,7 @@ import { useI18n } from '../context/I18nContext';
 import { apiClient } from '../services/apiClient';
 import { FALLBACK_BOOKS } from '../data/fallbackData';
 import { resolveBookCover } from '../utils/imageUrl';
+import { getAllReadingProgress, ReadingProgressData } from '../utils/readingProgress';
 
 interface MyLibraryViewProps {
   onOpenReader: (book: Book) => void;
@@ -20,6 +21,16 @@ export const MyLibraryView: React.FC<MyLibraryViewProps> = ({ onOpenReader, onSe
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [progressMap, setProgressMap] = useState<Record<string, ReadingProgressData>>({});
+
+  useEffect(() => {
+    const updateProgress = () => {
+      setProgressMap(getAllReadingProgress(user?.id));
+    };
+    updateProgress();
+    window.addEventListener('vb-reading-progress-updated', updateProgress);
+    return () => window.removeEventListener('vb-reading-progress-updated', updateProgress);
+  }, [user?.id]);
 
   useEffect(() => {
     const fetchLibrary = async () => {
@@ -174,6 +185,27 @@ export const MyLibraryView: React.FC<MyLibraryViewProps> = ({ onOpenReader, onSe
                     <span>Verified License</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Reading Progress Indicator */}
+              <div className="px-5 pb-3 space-y-1.5">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-[var(--text-muted)] font-medium">Reading Progress</span>
+                  <span className="font-mono font-bold text-[var(--accent-gold)]">
+                    {progressMap[book.id]?.percent || 0}%
+                  </span>
+                </div>
+                <div className="w-full bg-[var(--bg-surface-muted)] h-1.5 rounded-full overflow-hidden border border-[var(--border-subtle)]">
+                  <div
+                    className="bg-[var(--accent-gold)] h-full rounded-full transition-all duration-300"
+                    style={{ width: `${progressMap[book.id]?.percent || 0}%` }}
+                  />
+                </div>
+                {progressMap[book.id]?.chapterTitle && (
+                  <p className="text-[10px] text-[var(--text-muted)] truncate">
+                    Last read: {progressMap[book.id].chapterTitle}
+                  </p>
+                )}
               </div>
 
               {/* Action buttons */}

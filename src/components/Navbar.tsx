@@ -1,56 +1,77 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   ShoppingBag, BookMarked, User as UserIcon, ShieldAlert, LogOut,
-  Search, Menu, X, Heart, MessageSquare, Sun, Moon, Monitor, ChevronDown,
-  Globe, Settings, Check
+  Search, Heart, MessageSquare, Sun, Moon, Monitor, ChevronDown,
+  Globe, Settings, Check, LayoutGrid, X, Star, Flame, Sparkles, Tag, ArrowRight
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { useI18n } from '../context/I18nContext';
 import { resolveAvatarUrl } from '../utils/imageUrl';
+import { Book } from '../types';
 
 interface NavbarProps {
   currentView: string;
   onNavigate: (view: string, params?: any) => void;
   onOpenAuthModal: () => void;
   onOpenFeedback: () => void;
+  books?: Book[];
+  onSelectBook?: (book: Book) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentView,
   onNavigate,
   onOpenAuthModal,
-  onOpenFeedback
+  onOpenFeedback,
+  books = [],
+  onSelectBook
 }) => {
   const { user, logout, wishlist, isAdmin } = useAuth();
   const { items, setIsCartOpen } = useCart();
   const { theme, resolvedTheme, setTheme } = useTheme();
-  const { language, setLanguage, t, supportedLanguages, isRTL } = useI18n();
+  const { language, setLanguage, t, supportedLanguages } = useI18n();
+  const formatPrice = (price: number) => `₹${price.toLocaleString('en-IN')}`;
 
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
-  const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
+  // Dropdown states
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [langDropdownOpen, setLangDropdownOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [searchLangInput, setSearchLangInput] = useState('');
 
-  const themeRef = useRef<HTMLDivElement>(null);
-  const userRef = useRef<HTMLDivElement>(null);
+  // Refs for click outside
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
   const langRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const cartCount = items.length;
   const wishlistCount = wishlist.length;
 
-  // Close dropdowns when clicking outside
+  // Auto-focus search input when search opens
+  useEffect(() => {
+    if (searchOpen) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 50);
+    } else {
+      setSearchQuery('');
+    }
+  }, [searchOpen]);
+
+  // Click outside listener
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (themeRef.current && !themeRef.current.contains(e.target as Node)) {
-        setThemeDropdownOpen(false);
+      const target = e.target as Node;
+      if (workspaceRef.current && !workspaceRef.current.contains(target)) {
+        setWorkspaceOpen(false);
       }
-      if (userRef.current && !userRef.current.contains(e.target as Node)) {
-        setUserDropdownOpen(false);
+      if (searchRef.current && !searchRef.current.contains(target)) {
+        setSearchOpen(false);
       }
-      if (langRef.current && !langRef.current.contains(e.target as Node)) {
+      if (langRef.current && !langRef.current.contains(target)) {
         setLangDropdownOpen(false);
       }
     };
@@ -58,157 +79,467 @@ export const Navbar: React.FC<NavbarProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Lock body scroll when mobile menu is open
+  // Close modals on escape key
   useEffect(() => {
-    if (mobileMenuOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setWorkspaceOpen(false);
+        setSearchOpen(false);
+        setLangDropdownOpen(false);
+      }
     };
-  }, [mobileMenuOpen]);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
+  // Theme switcher helper
   const themeOptions: { mode: ThemeMode; label: string; icon: React.ReactNode }[] = [
     { mode: 'light', label: 'Light Mode', icon: <Sun className="w-3.5 h-3.5" /> },
     { mode: 'dark', label: 'Dark Mode', icon: <Moon className="w-3.5 h-3.5" /> },
     { mode: 'system', label: 'System Theme', icon: <Monitor className="w-3.5 h-3.5" /> },
   ];
 
-  const currentThemeIcon = resolvedTheme === 'dark' ? (
-    <Moon className="w-4 h-4 text-[var(--accent-gold)]" />
-  ) : (
-    <Sun className="w-4 h-4 text-[var(--accent-gold)]" />
-  );
-
-  const filteredLanguages = supportedLanguages.filter(l =>
-    l.name.toLowerCase().includes(searchLangInput.toLowerCase()) ||
-    l.nativeName.toLowerCase().includes(searchLangInput.toLowerCase()) ||
-    l.code.toLowerCase().includes(searchLangInput.toLowerCase())
-  );
+  // Filtered languages for selector
+  const filteredLanguages = useMemo(() => {
+    return supportedLanguages.filter(l =>
+      l.name.toLowerCase().includes(searchLangInput.toLowerCase()) ||
+      l.nativeName.toLowerCase().includes(searchLangInput.toLowerCase()) ||
+      l.code.toLowerCase().includes(searchLangInput.toLowerCase())
+    );
+  }, [supportedLanguages, searchLangInput]);
 
   const currentLangObj = supportedLanguages.find(l => l.code === language) || supportedLanguages[0];
 
+  // Persistent live real-time book search filtering
+  const searchResults = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return [];
+
+    return books.filter(b => {
+      const matchTitle = b.title.toLowerCase().includes(query);
+      const matchAuthor = b.author?.toLowerCase().includes(query);
+      const matchDesc = (b.shortDescription || '').toLowerCase().includes(query);
+      const matchCategory = (b.category || '').toLowerCase().includes(query);
+      const matchTag = b.tags && b.tags.some(t => t.toLowerCase().includes(query));
+      return matchTitle || matchAuthor || matchDesc || matchCategory || matchTag;
+    }).slice(0, 8); // top 8 matches
+  }, [books, searchQuery]);
+
+  const handleBookClick = (book: Book) => {
+    setSearchOpen(false);
+    if (onSelectBook) {
+      onSelectBook(book);
+    } else {
+      onNavigate('details', { id: book.id });
+    }
+  };
+
   return (
-    <header className="sticky top-0 z-40 bg-[var(--bg-page)]/95 backdrop-blur-xl border-b border-[var(--border-subtle)] transition-colors duration-200">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-18 sm:h-20 flex items-center justify-between gap-3 sm:gap-6">
+    <header className="sticky top-0 z-40 bg-[var(--bg-page)]/95 backdrop-blur-xl border-b border-[var(--border-subtle)] transition-colors duration-200 w-full max-w-full overflow-x-clip">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-3">
         
-        {/* Brand Identity Wordmark: ONLY text logo "VINOTH BOOKS", no tagline */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        {/* ======================================================== */}
+        {/* LEFT SIDE: Brand Logo + Workspace Menu Dropdown          */}
+        {/* ======================================================== */}
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+          {/* Logo */}
           <button
             onClick={() => onNavigate('home')}
-            className="group text-left flex items-center cursor-pointer transition-all duration-200"
+            className="group flex items-center cursor-pointer transition-all duration-200 select-none"
             aria-label="VINOTH BOOKS Home"
           >
-            <span className="font-serif text-xl sm:text-2xl font-bold tracking-wider text-[var(--text-primary)] leading-none group-hover:text-[var(--accent-gold)] transition-colors whitespace-nowrap">
+            <span className="font-serif text-lg sm:text-2xl font-extrabold tracking-wider text-[var(--text-primary)] leading-none group-hover:text-[var(--accent-gold)] transition-colors whitespace-nowrap">
               VINOTH BOOKS
             </span>
           </button>
+
+          {/* Workspace Menu Dropdown Trigger */}
+          <div className="relative" ref={workspaceRef}>
+            <button
+              onClick={() => setWorkspaceOpen(!workspaceOpen)}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all cursor-pointer border ${
+                workspaceOpen
+                  ? 'bg-[var(--accent-gold)] text-[#0B1325] border-[var(--accent-gold)] shadow-xs'
+                  : 'bg-[var(--bg-surface-elevated)] text-[var(--text-primary)] border-[var(--border-subtle)] hover:border-[var(--accent-gold)] hover:text-[var(--accent-gold)]'
+              }`}
+              aria-label="Toggle Workspace Menu"
+              aria-expanded={workspaceOpen}
+            >
+              <LayoutGrid className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span className="tracking-wide">Workspace</span>
+              <ChevronDown className={`w-3 h-3 sm:w-3.5 sm:h-3.5 transition-transform duration-200 shrink-0 ${workspaceOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Workspace Dropdown Panel */}
+            {workspaceOpen && (
+              <div className="absolute left-0 mt-2 w-72 sm:w-80 bg-[var(--bg-surface)] rounded-2xl border border-[var(--border-subtle)] shadow-2xl py-2 z-50 text-xs backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-150 max-h-[85vh] overflow-y-auto">
+                
+                {/* 1. Account / Sign In Status Header */}
+                <div className="p-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)]/50 rounded-t-xl">
+                  {user ? (
+                    <div className="flex items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <img
+                          src={resolveAvatarUrl(user.photoURL, user.avatar, user.name)}
+                          alt=""
+                          className="w-9 h-9 rounded-full object-cover shrink-0 ring-1 ring-[var(--accent-gold)]"
+                        />
+                        <div className="min-w-0">
+                          <p className="font-bold text-xs text-[var(--text-primary)] truncate">{user.name}</p>
+                          <p className="text-[10px] text-[var(--text-muted)] truncate">{user.email}</p>
+                          <span className={`inline-block mt-0.5 text-[9px] uppercase tracking-wider font-bold ${isAdmin ? 'text-[var(--accent-gold)]' : 'text-emerald-500'}`}>
+                            {isAdmin ? 'Publisher Admin' : 'Verified Reader'}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          logout();
+                          setWorkspaceOpen(false);
+                          onNavigate('home');
+                        }}
+                        className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer shrink-0"
+                        title="Sign Out"
+                      >
+                        <LogOut className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-bold text-xs text-[var(--text-primary)]">Welcome, Reader</p>
+                        <p className="text-[10px] text-[var(--text-muted)]">Sign in to sync library & orders</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setWorkspaceOpen(false);
+                          onOpenAuthModal();
+                        }}
+                        className="px-3 py-1.5 bg-[var(--accent-gold)] hover:bg-[var(--accent-gold-hover)] text-[#0B1325] text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+                      >
+                        {t('nav.signIn', 'Sign In')}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Primary Navigation Links */}
+                <div className="py-1.5 border-b border-[var(--border-subtle)]">
+                  <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                    Navigation
+                  </div>
+                  
+                  <button
+                    onClick={() => { setWorkspaceOpen(false); onNavigate('home'); }}
+                    className={`w-full text-left px-3.5 py-2 flex items-center justify-between transition-colors cursor-pointer ${
+                      currentView === 'home'
+                        ? 'bg-[var(--accent-gold-muted)] text-[var(--accent-gold)] font-bold'
+                        : 'text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)]'
+                    }`}
+                  >
+                    <span>{t('nav.home', 'Home')}</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setWorkspaceOpen(false); onNavigate('explore'); }}
+                    className={`w-full text-left px-3.5 py-2 flex items-center justify-between transition-colors cursor-pointer ${
+                      currentView === 'explore'
+                        ? 'bg-[var(--accent-gold-muted)] text-[var(--accent-gold)] font-bold'
+                        : 'text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)]'
+                    }`}
+                  >
+                    <span>{t('nav.explore', 'Explore Books')}</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setWorkspaceOpen(false); onNavigate('categories'); }}
+                    className={`w-full text-left px-3.5 py-2 flex items-center justify-between transition-colors cursor-pointer ${
+                      currentView === 'categories'
+                        ? 'bg-[var(--accent-gold-muted)] text-[var(--accent-gold)] font-bold'
+                        : 'text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)]'
+                    }`}
+                  >
+                    <span>{t('nav.categories', 'Categories')}</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setWorkspaceOpen(false); onNavigate('explore', { filter: 'bestseller' }); }}
+                    className="w-full text-left px-3.5 py-2 flex items-center justify-between text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] transition-colors cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Flame className="w-3.5 h-3.5 text-amber-500" />
+                      <span>{t('nav.bestSellers', 'Best Sellers')}</span>
+                    </span>
+                    <span className="text-[10px] bg-amber-500/10 text-amber-500 font-bold px-1.5 py-0.5 rounded">Hot</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setWorkspaceOpen(false); onNavigate('explore', { sort: 'newest' }); }}
+                    className="w-full text-left px-3.5 py-2 flex items-center justify-between text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] transition-colors cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                      <span>{t('nav.newReleases', 'New Releases')}</span>
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => { setWorkspaceOpen(false); onNavigate('explore', { filter: 'free' }); }}
+                    className="w-full text-left px-3.5 py-2 flex items-center justify-between text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] transition-colors cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Tag className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>{t('nav.freeBooks', 'Free eBooks')}</span>
+                    </span>
+                    <span className="text-[10px] bg-emerald-500/10 text-emerald-500 font-bold px-1.5 py-0.5 rounded">Free</span>
+                  </button>
+                </div>
+
+                {/* 3. Publisher Dashboard Section (If Admin) */}
+                {isAdmin && (
+                  <div className="py-1.5 border-b border-[var(--border-subtle)] bg-[var(--accent-gold)]/5">
+                    <button
+                      onClick={() => { setWorkspaceOpen(false); onNavigate('admin'); }}
+                      className={`w-full text-left px-3.5 py-2 flex items-center gap-2.5 text-[var(--accent-gold)] font-bold hover:bg-[var(--accent-gold-muted)] transition-colors cursor-pointer ${
+                        currentView === 'admin' ? 'bg-[var(--accent-gold-muted)]' : ''
+                      }`}
+                    >
+                      <ShieldAlert className="w-4 h-4 text-[var(--accent-gold)]" />
+                      <span>{t('nav.dashboard', 'Publisher Dashboard')}</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* 4. Reader Library & Account Links */}
+                {user && (
+                  <div className="py-1.5 border-b border-[var(--border-subtle)]">
+                    <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                      My Account
+                    </div>
+
+                    <button
+                      onClick={() => { setWorkspaceOpen(false); onNavigate('library'); }}
+                      className="w-full text-left px-3.5 py-2 flex items-center justify-between text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] transition-colors cursor-pointer"
+                    >
+                      <span className="flex items-center gap-2.5">
+                        <BookMarked className="w-4 h-4 text-[var(--accent-gold)]" />
+                        <span>{t('nav.library', 'My Library')}</span>
+                      </span>
+                      <span className="text-[10px] text-[var(--text-muted)] font-semibold">
+                        {user.library?.length || 0} books
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => { setWorkspaceOpen(false); onNavigate('orders'); }}
+                      className="w-full text-left px-3.5 py-2 flex items-center gap-2.5 text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] transition-colors cursor-pointer"
+                    >
+                      <ShoppingBag className="w-4 h-4 text-[var(--text-muted)]" />
+                      <span>{t('nav.orders', 'Order History')}</span>
+                    </button>
+
+                    <button
+                      onClick={() => { setWorkspaceOpen(false); onNavigate('settings'); }}
+                      className="w-full text-left px-3.5 py-2 flex items-center gap-2.5 text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] transition-colors cursor-pointer"
+                    >
+                      <Settings className="w-4 h-4 text-[var(--text-muted)]" />
+                      <span>{t('nav.settings', 'Account Settings')}</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* 5. Theme & Support Options */}
+                <div className="pt-1.5 px-3">
+                  <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)] py-1">
+                    <span>Appearance:</span>
+                    <div className="flex items-center gap-1 bg-[var(--bg-surface-elevated)] p-1 rounded-lg border border-[var(--border-subtle)]">
+                      {themeOptions.map(opt => (
+                        <button
+                          key={opt.mode}
+                          onClick={() => setTheme(opt.mode)}
+                          className={`p-1.5 rounded transition-all cursor-pointer ${
+                            theme === opt.mode
+                              ? 'bg-[var(--accent-gold)] text-[#0B1325]'
+                              : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                          }`}
+                          title={opt.label}
+                        >
+                          {opt.icon}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setWorkspaceOpen(false);
+                      onOpenFeedback();
+                    }}
+                    className="w-full mt-2 py-1.5 text-center text-[11px] font-semibold text-[var(--accent-gold)] hover:underline flex items-center justify-center gap-1.5"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>Customer Support & Feedback</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Desktop Editorial Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-6 xl:gap-7 text-sm font-medium text-[var(--text-secondary)]">
-          <button
-            onClick={() => onNavigate('home')}
-            className={`whitespace-nowrap transition-colors py-1 cursor-pointer hover:text-[var(--text-primary)] ${
-              currentView === 'home'
-                ? 'text-[var(--text-primary)] font-bold border-b-2 border-[var(--accent-gold)]'
-                : ''
-            }`}
-          >
-            {t('nav.home', 'Home')}
-          </button>
-
-          <button
-            onClick={() => onNavigate('explore')}
-            className={`whitespace-nowrap transition-colors py-1 cursor-pointer hover:text-[var(--text-primary)] ${
-              currentView === 'explore'
-                ? 'text-[var(--text-primary)] font-bold border-b-2 border-[var(--accent-gold)]'
-                : ''
-            }`}
-          >
-            {t('nav.explore', 'Explore Books')}
-          </button>
-
-          <button
-            onClick={() => onNavigate('categories')}
-            className={`whitespace-nowrap transition-colors py-1 cursor-pointer hover:text-[var(--text-primary)] ${
-              currentView === 'categories'
-                ? 'text-[var(--text-primary)] font-bold border-b-2 border-[var(--accent-gold)]'
-                : ''
-            }`}
-          >
-            {t('nav.categories', 'Categories')}
-          </button>
-
-          <button
-            onClick={() => onNavigate('explore', { filter: 'bestseller' })}
-            className="whitespace-nowrap transition-colors py-1 cursor-pointer hover:text-[var(--text-primary)]"
-          >
-            {t('nav.bestSellers', 'Best Sellers')}
-          </button>
-
-          <button
-            onClick={() => onNavigate('explore', { sort: 'newest' })}
-            className="whitespace-nowrap transition-colors py-1 cursor-pointer hover:text-[var(--text-primary)]"
-          >
-            {t('nav.newReleases', 'New Releases')}
-          </button>
-
-          <button
-            onClick={() => onNavigate('explore', { filter: 'free' })}
-            className="whitespace-nowrap transition-colors py-1 cursor-pointer hover:text-[var(--text-primary)] flex items-center gap-1.5"
-          >
-            <span>{t('nav.freeBooks', 'Free eBooks')}</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          </button>
-
-          {isAdmin && (
-            <button
-              onClick={() => onNavigate('admin')}
-              className={`whitespace-nowrap transition-colors py-1 cursor-pointer text-[var(--accent-gold)] font-bold flex items-center gap-1.5 ${
-                currentView === 'admin'
-                  ? 'border-b-2 border-[var(--accent-gold)]'
-                  : ''
-              }`}
-            >
-              <ShieldAlert className="w-4 h-4 text-[var(--accent-gold)]" />
-              <span>{t('nav.dashboard', 'Publisher Dashboard')}</span>
-            </button>
-          )}
-        </nav>
-
-        {/* Right-Hand Controls: Desktop full toolbar vs Mobile compact header */}
+        {/* ======================================================== */}
+        {/* RIGHT SIDE: EXACTLY 4 PRIMARY ACTIONS                    */}
+        {/* 1. Search | 2. Language | 3. Cart | 4. Favorites        */}
+        {/* ======================================================== */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           
-          {/* DESKTOP ONLY: Quick Search */}
-          <button
-            onClick={() => onNavigate('explore')}
-            className="hidden lg:flex p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] rounded-lg transition-colors cursor-pointer"
-            title={t('common.search', 'Search')}
-            aria-label="Search catalog"
-          >
-            <Search className="w-4.5 h-4.5" />
-          </button>
+          {/* ACTION 1: Real-Time Persistent Search */}
+          <div className="relative" ref={searchRef}>
+            <button
+              onClick={() => setSearchOpen(!searchOpen)}
+              className={`p-2 rounded-xl transition-all cursor-pointer border ${
+                searchOpen
+                  ? 'bg-[var(--accent-gold)] text-[#0B1325] border-[var(--accent-gold)] shadow-xs'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] border-transparent hover:border-[var(--border-subtle)]'
+              }`}
+              title={t('common.search', 'Search Catalog')}
+              aria-label="Search Catalog"
+              aria-expanded={searchOpen}
+            >
+              <Search className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
+            </button>
 
-          {/* DESKTOP ONLY: 30-Language Selector Dropdown */}
-          <div className="relative hidden lg:block" ref={langRef}>
+            {/* Live Interactive Search Dropdown Panel */}
+            {searchOpen && (
+              <div className="fixed sm:absolute top-18 sm:top-full left-2 right-2 sm:left-auto sm:right-0 sm:mt-2 sm:w-[420px] bg-[var(--bg-surface)] rounded-2xl border border-[var(--border-subtle)] shadow-2xl p-3 z-50 backdrop-blur-2xl animate-in fade-in slide-in-from-top-2 duration-150">
+                {/* Search Input Box */}
+                <div className="relative flex items-center">
+                  <Search className="absolute left-3 w-4 h-4 text-[var(--text-muted)] pointer-events-none" />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search by title, author, or description..."
+                    className="w-full pl-9 pr-8 py-2 bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] focus:border-[var(--accent-gold)] rounded-xl text-xs sm:text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition-colors"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                      title="Clear search"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Real-Time Dropdown Results */}
+                <div className="mt-2.5 max-h-[380px] overflow-y-auto divide-y divide-[var(--border-subtle)]">
+                  {searchQuery.trim() ? (
+                    searchResults.length > 0 ? (
+                      <div>
+                        <div className="px-1 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                          Matching Books ({searchResults.length})
+                        </div>
+                        {searchResults.map(book => (
+                          <div
+                            key={book.id}
+                            onClick={() => handleBookClick(book)}
+                            className="p-2 rounded-xl hover:bg-[var(--bg-surface-muted)] transition-colors cursor-pointer flex items-center gap-3 group"
+                          >
+                            <img
+                              src={book.coverImage}
+                              alt={book.title}
+                              className="w-10 h-14 object-cover rounded-md shadow-xs shrink-0 ring-1 ring-[var(--border-subtle)]"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=150&q=80';
+                              }}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <h4 className="text-xs font-bold text-[var(--text-primary)] group-hover:text-[var(--accent-gold)] transition-colors truncate">
+                                {book.title}
+                              </h4>
+                              <p className="text-[11px] text-[var(--text-secondary)] truncate">
+                                by {book.author}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-surface-elevated)] text-[var(--text-muted)] border border-[var(--border-subtle)]">
+                                  {book.category}
+                                </span>
+                                <span className="text-[10px] text-amber-500 font-semibold flex items-center gap-0.5">
+                                  <Star className="w-2.5 h-2.5 fill-current" />
+                                  {book.rating?.toFixed(1) || '4.9'}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <span className="text-xs font-bold text-[var(--accent-gold)]">
+                                {book.isFree ? 'FREE' : formatPrice(book.sellingPrice)}
+                              </span>
+                              <div className="text-[10px] text-[var(--text-muted)] flex items-center justify-end gap-1 group-hover:text-[var(--accent-gold)] mt-0.5">
+                                <span>View</span>
+                                <ArrowRight className="w-2.5 h-2.5" />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-6 text-center text-xs text-[var(--text-muted)]">
+                        <p className="font-semibold text-[var(--text-secondary)]">No books found</p>
+                        <p className="text-[11px] mt-1">No title, author, or description matched "{searchQuery}"</p>
+                        <button
+                          onClick={() => {
+                            setSearchOpen(false);
+                            onNavigate('explore');
+                          }}
+                          className="mt-3 text-[11px] font-bold text-[var(--accent-gold)] hover:underline inline-block"
+                        >
+                          Browse Full Catalog →
+                        </button>
+                      </div>
+                    )
+                  ) : (
+                    <div className="py-2">
+                      <div className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                        Popular Quick Searches
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {['Fiction', 'Self-Help', 'Finance', 'Technology', 'Bestsellers', 'Free'].map(tag => (
+                          <button
+                            key={tag}
+                            onClick={() => setSearchQuery(tag)}
+                            className="px-2.5 py-1 text-[11px] font-medium bg-[var(--bg-surface-elevated)] hover:bg-[var(--accent-gold-muted)] hover:text-[var(--accent-gold)] border border-[var(--border-subtle)] rounded-lg transition-colors cursor-pointer"
+                          >
+                            {tag}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ACTION 2: 30-Language Selector Dropdown */}
+          <div className="relative" ref={langRef}>
             <button
               onClick={() => setLangDropdownOpen(!langDropdownOpen)}
-              className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] border border-transparent hover:border-[var(--border-subtle)] transition-all cursor-pointer flex items-center gap-1.5"
+              className="px-2 sm:px-2.5 py-1.5 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] border border-transparent hover:border-[var(--border-subtle)] transition-all cursor-pointer flex items-center gap-1 sm:gap-1.5"
               aria-label="Select Language"
               title={`Active Language: ${currentLangObj.name} (${currentLangObj.nativeName})`}
+              aria-expanded={langDropdownOpen}
             >
-              <Globe className="w-4 h-4 text-[var(--accent-gold)]" />
-              <span className="text-[11px] font-bold uppercase tracking-wider">
+              <Globe className="w-4 h-4 text-[var(--accent-gold)] shrink-0" />
+              <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider">
                 {language}
               </span>
-              <ChevronDown className="w-3 h-3 text-[var(--text-muted)]" />
+              <ChevronDown className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
             </button>
 
             {langDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-64 bg-[var(--bg-surface)] rounded-xl border border-[var(--border-subtle)] shadow-2xl py-2 z-50 text-xs backdrop-blur-xl animate-in fade-in duration-150">
+              <div className="fixed sm:absolute top-18 sm:top-full left-2 right-2 sm:left-auto sm:right-0 sm:mt-2 sm:w-68 bg-[var(--bg-surface)] rounded-2xl border border-[var(--border-subtle)] shadow-2xl py-2 z-50 text-xs backdrop-blur-xl animate-in fade-in duration-150">
                 <div className="px-3 pb-2 border-b border-[var(--border-subtle)]">
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
@@ -234,7 +565,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   />
                 </div>
 
-                <div className="max-h-56 overflow-y-auto py-1">
+                <div className="max-h-60 overflow-y-auto py-1">
                   {filteredLanguages.map((l) => (
                     <button
                       key={l.code}
@@ -260,484 +591,39 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </div>
 
-          {/* DESKTOP ONLY: Theme Switcher Dropdown */}
-          <div className="relative hidden lg:block" ref={themeRef}>
-            <button
-              onClick={() => setThemeDropdownOpen(!themeDropdownOpen)}
-              className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] border border-transparent hover:border-[var(--border-subtle)] transition-all cursor-pointer flex items-center gap-1"
-              aria-label="Switch theme mode"
-              title={`Current Theme: ${theme.toUpperCase()} (${resolvedTheme} active)`}
-            >
-              {currentThemeIcon}
-              <ChevronDown className="w-3 h-3 text-[var(--text-muted)]" />
-            </button>
-
-            {themeDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-44 bg-[var(--bg-surface)] rounded-xl border border-[var(--border-subtle)] shadow-2xl py-1.5 z-50 text-xs backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-150">
-                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--border-subtle)]">
-                  {t('nav.appearance', 'Appearance')}
-                </div>
-                {themeOptions.map((opt) => (
-                  <button
-                    key={opt.mode}
-                    onClick={() => {
-                      setTheme(opt.mode);
-                      setThemeDropdownOpen(false);
-                    }}
-                    className={`w-full text-left px-3.5 py-2 flex items-center justify-between transition-colors cursor-pointer ${
-                      theme === opt.mode
-                        ? 'bg-[var(--accent-gold-muted)] text-[var(--accent-gold)] font-bold'
-                        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-muted)] hover:text-[var(--text-primary)]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      {opt.icon}
-                      <span>{opt.label}</span>
-                    </div>
-                    {theme === opt.mode && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-gold)]" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* DESKTOP ONLY: Customer Support button */}
-          <button
-            onClick={onOpenFeedback}
-            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)] hover:border-[var(--border-strong)] rounded-lg hover:bg-[var(--bg-surface-muted)] transition-all cursor-pointer"
-            title="Customer Support & Feedback"
-          >
-            <MessageSquare className="w-3.5 h-3.5 text-[var(--accent-gold)]" />
-            <span>{t('nav.support', 'Support')}</span>
-          </button>
-
-          {/* DESKTOP ONLY: Wishlist Link */}
-          <button
-            onClick={() => onNavigate('wishlist')}
-            className="hidden lg:flex relative p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] rounded-lg transition-colors cursor-pointer"
-            title={t('nav.wishlist', 'Wishlist')}
-            aria-label="Wishlist"
-          >
-            <Heart className={`w-4.5 h-4.5 ${wishlistCount > 0 ? 'fill-red-500 text-red-500' : ''}`} />
-            {wishlistCount > 0 && (
-              <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center tabular-nums">
-                {wishlistCount}
-              </span>
-            )}
-          </button>
-
-          {/* SHARED (Desktop & Mobile): Shopping Cart button */}
+          {/* ACTION 3: Shopping Cart Button with Live Badge */}
           <button
             onClick={() => setIsCartOpen(true)}
-            className="relative p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] rounded-lg transition-colors cursor-pointer"
+            className="relative p-2 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] border border-transparent hover:border-[var(--border-subtle)] transition-colors cursor-pointer"
             title={t('nav.cart', 'Cart')}
             aria-label="Open Shopping Cart"
           >
             <ShoppingBag className="w-5 h-5 text-[var(--text-primary)]" />
             {cartCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-[var(--accent-gold)] text-[#0B1325] text-[10px] font-bold rounded-full flex items-center justify-center tabular-nums shadow-xs">
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-[var(--accent-gold)] text-[#0B1325] text-[10px] font-bold rounded-full flex items-center justify-center tabular-nums shadow-xs animate-in zoom-in-50">
                 {cartCount}
               </span>
             )}
           </button>
 
-          {/* DESKTOP ONLY: User Account / Auth Dropdown */}
-          {user ? (
-            <div className="relative hidden lg:block" ref={userRef}>
-              <button
-                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
-                  isAdmin
-                    ? 'border-[var(--border-strong)] bg-[var(--bg-surface-card)] text-[var(--accent-gold)] shadow-xs'
-                    : 'border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)]'
-                }`}
-              >
-                <img
-                  src={resolveAvatarUrl(user.photoURL, user.avatar, user.name)}
-                  alt=""
-                  className="w-5 h-5 rounded-full object-cover shrink-0 ring-1 ring-[var(--accent-gold)]"
-                />
-                <span className="max-w-[110px] truncate">{user.name.split(' ')[0]}</span>
-                <ChevronDown className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
-              </button>
-
-              {userDropdownOpen && (
-                <div
-                  className="absolute right-0 mt-2 w-60 bg-[var(--bg-surface)] rounded-xl border border-[var(--border-subtle)] shadow-2xl py-2 z-50 text-xs backdrop-blur-xl animate-in fade-in"
-                  onClick={() => setUserDropdownOpen(false)}
-                >
-                  <div className="px-4 py-2.5 border-b border-[var(--border-subtle)] flex items-center gap-3">
-                    <img
-                      src={resolveAvatarUrl(user.photoURL, user.avatar, user.name)}
-                      alt=""
-                      className="w-9 h-9 rounded-full object-cover ring-1 ring-[var(--accent-gold)] shrink-0"
-                    />
-                    <div className="min-w-0">
-                      <p className="font-semibold text-[var(--text-primary)] truncate">{user.name}</p>
-                      <p className="text-[11px] text-[var(--text-muted)] truncate">{user.email}</p>
-                      {isAdmin ? (
-                        <span className="inline-block mt-0.5 text-[9px] font-bold uppercase tracking-wider bg-[var(--accent-gold-muted)] text-[var(--accent-gold)] px-2 py-0.5 rounded">
-                          Authorized Publisher
-                        </span>
-                      ) : (
-                        <span className="inline-block mt-0.5 text-[9px] font-semibold text-[var(--text-muted)]">
-                          Reader Account
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {isAdmin && (
-                    <button
-                      onClick={() => onNavigate('admin')}
-                      className="w-full text-left px-4 py-2.5 hover:bg-[var(--bg-surface-muted)] flex items-center gap-2.5 text-[var(--accent-gold)] font-bold cursor-pointer"
-                    >
-                      <ShieldAlert className="w-4 h-4 text-[var(--accent-gold)]" />
-                      <span>{t('nav.dashboard', 'Publisher Dashboard')}</span>
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => onNavigate('library')}
-                    className="w-full text-left px-4 py-2.5 hover:bg-[var(--bg-surface-muted)] flex items-center gap-2.5 text-[var(--text-primary)] cursor-pointer"
-                  >
-                    <BookMarked className="w-4 h-4 text-[var(--accent-gold)]" />
-                    <span>{t('nav.library', 'My Library')} ({user.library?.length || 0})</span>
-                  </button>
-
-                  <button
-                    onClick={() => onNavigate('wishlist')}
-                    className="w-full text-left px-4 py-2 hover:bg-[var(--bg-surface-muted)] flex items-center gap-2.5 text-[var(--text-primary)] cursor-pointer"
-                  >
-                    <Heart className="w-4 h-4 text-red-500" />
-                    <span>{t('nav.wishlist', 'Wishlist')} ({wishlistCount})</span>
-                  </button>
-
-                  <button
-                    onClick={() => onNavigate('orders')}
-                    className="w-full text-left px-4 py-2 hover:bg-[var(--bg-surface-muted)] flex items-center gap-2.5 text-[var(--text-primary)] cursor-pointer"
-                  >
-                    <ShoppingBag className="w-4 h-4 text-[var(--text-muted)]" />
-                    <span>{t('nav.orders', 'Order History')}</span>
-                  </button>
-
-                  <button
-                    onClick={() => onNavigate('settings')}
-                    className="w-full text-left px-4 py-2 hover:bg-[var(--bg-surface-muted)] flex items-center gap-2.5 text-[var(--text-primary)] cursor-pointer"
-                  >
-                    <Settings className="w-4 h-4 text-[var(--text-muted)]" />
-                    <span>{t('nav.settings', 'Account Settings')}</span>
-                  </button>
-
-                  <div className="border-t border-[var(--border-subtle)] mt-1 pt-1">
-                    <button
-                      onClick={logout}
-                      className="w-full text-left px-4 py-2 hover:bg-red-500/10 flex items-center gap-2 text-red-500 font-semibold cursor-pointer"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      <span>{t('nav.signOut', 'Sign Out')}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="hidden lg:flex items-center gap-2">
-              <button
-                onClick={onOpenAuthModal}
-                className="px-4 py-2 text-xs font-semibold uppercase tracking-wider bg-[var(--accent-gold)] hover:bg-[var(--accent-gold-hover)] text-[#0B1325] rounded-lg transition-all shadow-xs cursor-pointer whitespace-nowrap"
-              >
-                {t('nav.signIn', 'Sign In')}
-              </button>
-            </div>
-          )}
-
-          {/* MOBILE ONLY: Compact Menu Hamburger Button (Three horizontal lines) */}
+          {/* ACTION 4: Favorites / Wishlist Button with Live Badge */}
           <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden p-2 text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] rounded-lg transition-colors cursor-pointer"
-            aria-label={mobileMenuOpen ? 'Close Menu' : 'Open Navigation Menu'}
+            onClick={() => onNavigate('wishlist')}
+            className="relative p-2 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] border border-transparent hover:border-[var(--border-subtle)] transition-colors cursor-pointer"
+            title={t('nav.wishlist', 'Wishlist / Favorites')}
+            aria-label="Wishlist / Favorites"
           >
-            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            <Heart className={`w-5 h-5 transition-transform active:scale-90 ${wishlistCount > 0 ? 'fill-red-500 text-red-500' : 'text-[var(--text-primary)]'}`} />
+            {wishlistCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center tabular-nums shadow-xs animate-in zoom-in-50">
+                {wishlistCount}
+              </span>
+            )}
           </button>
+
         </div>
+
       </div>
-
-      {/* MOBILE HAMBURGER MENU DRAWER (Only rendered on mobile / small screens) */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-5 space-y-5 animate-in fade-in duration-200 max-h-[calc(100vh-4.5rem)] overflow-y-auto">
-          
-          {/* 1. Mobile User Auth Status Header */}
-          {user ? (
-            <div className="p-3.5 bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] rounded-xl flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <img
-                  src={resolveAvatarUrl(user.photoURL, user.avatar, user.name)}
-                  alt=""
-                  className="w-10 h-10 rounded-full object-cover shrink-0 ring-1 ring-[var(--accent-gold)]"
-                />
-                <div className="min-w-0">
-                  <p className="font-bold text-xs text-[var(--text-primary)] truncate">{user.name}</p>
-                  <p className="text-[11px] text-[var(--text-muted)] truncate">{user.email}</p>
-                  <span className="inline-block mt-0.5 text-[9px] uppercase tracking-wider font-bold text-[var(--accent-gold)]">
-                    {isAdmin ? 'Publisher Administrator' : 'Verified Reader'}
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  logout();
-                  setMobileMenuOpen(false);
-                  onNavigate('home');
-                }}
-                className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer shrink-0"
-                title="Sign Out"
-                aria-label="Sign Out"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  onOpenAuthModal();
-                }}
-                className="w-full py-3 px-4 bg-[var(--accent-gold)] hover:bg-[var(--accent-gold-hover)] text-[#0B1325] text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <UserIcon className="w-4 h-4" />
-                <span>{t('nav.signIn', 'Sign In')} / Register</span>
-              </button>
-            </div>
-          )}
-
-          {/* 2. Mobile Catalog Search Input */}
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search books, topics, authors..."
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const val = (e.target as HTMLInputElement).value.trim();
-                  if (val) {
-                    onNavigate('explore', { search: val });
-                    setMobileMenuOpen(false);
-                  }
-                }
-              }}
-              className="w-full pl-9 pr-3 py-2 bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] rounded-xl text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-gold)]"
-            />
-            <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-2.5 pointer-events-none" />
-          </div>
-
-          {/* 3. Primary Mobile Navigation Links */}
-          <nav className="flex flex-col space-y-1 text-sm font-medium text-[var(--text-primary)] divide-y divide-[var(--border-subtle)]/50">
-            <div className="space-y-1 pb-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] px-2">
-                Catalog & Discovery
-              </span>
-              <button
-                onClick={() => { onNavigate('home'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-2 py-2 rounded-lg hover:text-[var(--accent-gold)] hover:bg-[var(--bg-surface-muted)] cursor-pointer flex items-center justify-between ${
-                  currentView === 'home' ? 'text-[var(--accent-gold)] font-bold bg-[var(--accent-gold-muted)]' : ''
-                }`}
-              >
-                <span>{t('nav.home', 'Home')}</span>
-              </button>
-              <button
-                onClick={() => { onNavigate('explore'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-2 py-2 rounded-lg hover:text-[var(--accent-gold)] hover:bg-[var(--bg-surface-muted)] cursor-pointer flex items-center justify-between ${
-                  currentView === 'explore' ? 'text-[var(--accent-gold)] font-bold bg-[var(--accent-gold-muted)]' : ''
-                }`}
-              >
-                <span>{t('nav.explore', 'Explore Books')}</span>
-              </button>
-              <button
-                onClick={() => { onNavigate('categories'); setMobileMenuOpen(false); }}
-                className={`w-full text-left px-2 py-2 rounded-lg hover:text-[var(--accent-gold)] hover:bg-[var(--bg-surface-muted)] cursor-pointer flex items-center justify-between ${
-                  currentView === 'categories' ? 'text-[var(--accent-gold)] font-bold bg-[var(--accent-gold-muted)]' : ''
-                }`}
-              >
-                <span>{t('nav.categories', 'Categories')}</span>
-              </button>
-              <button
-                onClick={() => { onNavigate('explore', { filter: 'bestseller' }); setMobileMenuOpen(false); }}
-                className="w-full text-left px-2 py-2 rounded-lg hover:text-[var(--accent-gold)] hover:bg-[var(--bg-surface-muted)] cursor-pointer flex items-center justify-between"
-              >
-                <span>{t('nav.bestSellers', 'Best Sellers')}</span>
-              </button>
-              <button
-                onClick={() => { onNavigate('explore', { sort: 'newest' }); setMobileMenuOpen(false); }}
-                className="w-full text-left px-2 py-2 rounded-lg hover:text-[var(--accent-gold)] hover:bg-[var(--bg-surface-muted)] cursor-pointer flex items-center justify-between"
-              >
-                <span>{t('nav.newReleases', 'New Releases')}</span>
-              </button>
-              <button
-                onClick={() => { onNavigate('explore', { filter: 'free' }); setMobileMenuOpen(false); }}
-                className="w-full text-left px-2 py-2 rounded-lg hover:text-[var(--accent-gold)] hover:bg-[var(--bg-surface-muted)] cursor-pointer flex items-center justify-between"
-              >
-                <span>{t('nav.freeBooks', 'Free eBooks')}</span>
-                <span className="text-[10px] uppercase font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded">
-                  Open Access
-                </span>
-              </button>
-            </div>
-
-            {/* Reader Account & Library Links */}
-            <div className="space-y-1 pt-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] px-2">
-                Personal Reader Space
-              </span>
-              {user && (
-                <button
-                  onClick={() => { onNavigate('library'); setMobileMenuOpen(false); }}
-                  className="w-full text-left px-2 py-2 rounded-lg hover:text-[var(--accent-gold)] hover:bg-[var(--bg-surface-muted)] cursor-pointer flex items-center justify-between font-semibold"
-                >
-                  <div className="flex items-center gap-2">
-                    <BookMarked className="w-4 h-4 text-[var(--accent-gold)]" />
-                    <span>{t('nav.library', 'My Library')}</span>
-                  </div>
-                  <span className="font-mono text-xs bg-[var(--accent-gold-muted)] text-[var(--accent-gold)] px-2 py-0.5 rounded font-bold">
-                    {user.library?.length || 0}
-                  </span>
-                </button>
-              )}
-              <button
-                onClick={() => { onNavigate('wishlist'); setMobileMenuOpen(false); }}
-                className="w-full text-left px-2 py-2 rounded-lg hover:text-[var(--accent-gold)] hover:bg-[var(--bg-surface-muted)] cursor-pointer flex items-center justify-between"
-              >
-                <div className="flex items-center gap-2">
-                  <Heart className={`w-4 h-4 ${wishlistCount > 0 ? 'fill-red-500 text-red-500' : 'text-[var(--text-muted)]'}`} />
-                  <span>{t('nav.wishlist', 'Wishlist')}</span>
-                </div>
-                <span className="font-mono text-xs bg-[var(--bg-surface-muted)] text-[var(--text-muted)] px-2 py-0.5 rounded">
-                  {wishlistCount}
-                </span>
-              </button>
-              <button
-                onClick={() => { setIsCartOpen(true); setMobileMenuOpen(false); }}
-                className="w-full text-left px-2 py-2 rounded-lg hover:text-[var(--accent-gold)] hover:bg-[var(--bg-surface-muted)] cursor-pointer flex items-center justify-between"
-              >
-                <div className="flex items-center gap-2">
-                  <ShoppingBag className="w-4 h-4 text-[var(--text-muted)]" />
-                  <span>{t('nav.cart', 'Cart')}</span>
-                </div>
-                <span className="font-mono text-xs bg-[var(--accent-gold-muted)] text-[var(--accent-gold)] px-2 py-0.5 rounded font-bold">
-                  {cartCount}
-                </span>
-              </button>
-              {user && (
-                <>
-                  <button
-                    onClick={() => { onNavigate('orders'); setMobileMenuOpen(false); }}
-                    className="w-full text-left px-2 py-2 rounded-lg hover:text-[var(--accent-gold)] hover:bg-[var(--bg-surface-muted)] cursor-pointer flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-2">
-                      <ShoppingBag className="w-4 h-4 text-[var(--text-muted)]" />
-                      <span>{t('nav.orders', 'Order History')}</span>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => { onNavigate('settings'); setMobileMenuOpen(false); }}
-                    className="w-full text-left px-2 py-2 rounded-lg hover:text-[var(--accent-gold)] hover:bg-[var(--bg-surface-muted)] cursor-pointer flex items-center gap-2"
-                  >
-                    <Settings className="w-4 h-4 text-[var(--text-muted)]" />
-                    <span>{t('nav.settings', 'Account Settings')}</span>
-                  </button>
-                </>
-              )}
-              <button
-                onClick={() => { onOpenFeedback(); setMobileMenuOpen(false); }}
-                className="w-full text-left px-2 py-2 rounded-lg hover:text-[var(--accent-gold)] hover:bg-[var(--bg-surface-muted)] cursor-pointer flex items-center gap-2"
-              >
-                <MessageSquare className="w-4 h-4 text-[var(--accent-gold)]" />
-                <span>{t('nav.support', 'Customer Support & Feedback')}</span>
-              </button>
-              {isAdmin && (
-                <button
-                  onClick={() => { onNavigate('admin'); setMobileMenuOpen(false); }}
-                  className="w-full text-left px-2 py-2 rounded-lg text-[var(--accent-gold)] font-bold cursor-pointer flex items-center gap-2 bg-[var(--accent-gold-muted)]"
-                >
-                  <ShieldAlert className="w-4 h-4" />
-                  <span>{t('nav.dashboard', 'Publisher Admin Dashboard')}</span>
-                </button>
-              )}
-            </div>
-          </nav>
-
-          {/* 4. Mobile Language and Theme Selectors */}
-          <div className="pt-3 border-t border-[var(--border-subtle)] space-y-4 text-xs">
-            {/* Appearance switch */}
-            <div className="flex items-center justify-between">
-              <span className="text-[var(--text-muted)] font-medium">{t('nav.appearance', 'Appearance')}:</span>
-              <div className="flex items-center gap-1">
-                {themeOptions.map((opt) => (
-                  <button
-                    key={opt.mode}
-                    onClick={() => setTheme(opt.mode)}
-                    className={`px-2.5 py-1 rounded text-xs transition-colors cursor-pointer flex items-center gap-1.5 ${
-                      theme === opt.mode
-                        ? 'bg-[var(--accent-gold)] text-[#0B1325] font-bold'
-                        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-muted)]'
-                    }`}
-                  >
-                    {opt.icon}
-                    <span>{opt.label.split(' ')[0]}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Language Selection: 30 Languages with Search */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[var(--text-muted)] font-medium flex items-center gap-1">
-                  <Globe className="w-3.5 h-3.5 text-[var(--accent-gold)]" />
-                  <span>{t('nav.language', 'Language')} ({supportedLanguages.length}):</span>
-                </span>
-                <span className="text-[11px] font-bold text-[var(--accent-gold)]">
-                  {currentLangObj.name} ({currentLangObj.nativeName})
-                </span>
-              </div>
-
-              {/* Language Search in Mobile Menu */}
-              <input
-                type="text"
-                placeholder="Search languages..."
-                value={searchLangInput}
-                onChange={(e) => setSearchLangInput(e.target.value)}
-                className="w-full px-2.5 py-1.5 bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] rounded-lg text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-gold)]"
-              />
-
-              <div className="max-h-40 overflow-y-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface-elevated)] divide-y divide-[var(--border-subtle)]/40">
-                {filteredLanguages.map((l) => (
-                  <button
-                    key={l.code}
-                    onClick={() => {
-                      setLanguage(l.code);
-                      setMobileMenuOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 flex items-center justify-between transition-colors cursor-pointer text-xs ${
-                      language === l.code
-                        ? 'bg-[var(--accent-gold-muted)] text-[var(--accent-gold)] font-bold'
-                        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-muted)] hover:text-[var(--text-primary)]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{l.nativeName}</span>
-                      <span className="text-[10px] text-[var(--text-muted)]">({l.name})</span>
-                    </div>
-                    {language === l.code && <Check className="w-3.5 h-3.5 text-[var(--accent-gold)]" />}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </header>
   );
 };
