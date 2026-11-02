@@ -7,7 +7,7 @@ export default defineConfig(() => {
   // Support both Vercel (root '/') and GitHub Pages ('/VINOTH-BOOKS/') dynamically
   const isVercel = Boolean(process.env.VERCEL || process.env.NOW_BUILDER);
   const isGitHubPages = process.env.GITHUB_PAGES === 'true' || process.env.DEPLOY_TARGET === 'gh-pages';
-  const basePath = process.env.VITE_BASE_PATH || (isVercel ? '/' : (isGitHubPages ? '/VINOTH-BOOKS/' : '/'));
+  const basePath = process.env.VITE_BASE_PATH || (isVercel ? '/' : '/VINOTH-BOOKS/');
 
   return {
     base: basePath,
