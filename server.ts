@@ -6,9 +6,8 @@ import path from 'path';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
-import { initializeApp as initAdminApp, getApps as getAdminApps, cert } from 'firebase-admin/app';
-import { getAuth as getAdminAuth } from 'firebase-admin/auth';
 import { db, Book, Category, Order, User, hashPassword, generateSalt } from './server/db.js';
+import { initializeFirebaseAdmin } from './server/firebaseAdmin.js';
 
 dotenv.config();
 
@@ -16,50 +15,9 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const APP_SECRET = process.env.APP_SECRET || 'vinoth-books-super-secure-key-2026';
 
-// Initialize Firebase Admin SDK for Server-Side ID Token Verification
-let adminAuth: ReturnType<typeof getAdminAuth> | null = null;
-try {
-  let serviceAccount: any = null;
-  const rawKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (rawKey) {
-    try {
-      const decoded = rawKey.startsWith('{') ? rawKey : Buffer.from(rawKey, 'base64').toString('utf-8');
-      serviceAccount = JSON.parse(decoded);
-    } catch (parseErr) {
-      console.warn('[Firebase Admin] Could not parse FIREBASE_SERVICE_ACCOUNT_KEY JSON:', parseErr);
-    }
-  }
-
-  let fbProjectId = process.env.FIREBASE_PROJECT_ID;
-  const configPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
-  if (fs.existsSync(configPath)) {
-    try {
-      const raw = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      fbProjectId = fbProjectId || raw.projectId;
-    } catch {}
-  }
-
-  if (getAdminApps().length === 0) {
-    let adminApp;
-    if (serviceAccount) {
-      adminApp = initAdminApp({
-        credential: cert(serviceAccount),
-        projectId: serviceAccount.project_id || fbProjectId
-      });
-      console.log(`[Firebase Admin] Initialized with Service Account: ${serviceAccount.client_email}`);
-    } else if (fbProjectId) {
-      adminApp = initAdminApp({ projectId: fbProjectId });
-      console.log(`[Firebase Admin] Initialized with project ID: ${fbProjectId}`);
-    }
-    if (adminApp) {
-      adminAuth = getAdminAuth(adminApp);
-    }
-  } else {
-    adminAuth = getAdminAuth(getAdminApps()[0]);
-  }
-} catch (err: any) {
-  console.warn('[Firebase Admin] Warning during initialization:', err.message);
-}
+// Centralized Firebase Admin SDK instance
+const firebaseAdminState = initializeFirebaseAdmin();
+const adminAuth = firebaseAdminState.adminAuth;
 
 // CORS Configuration for Production & Local Development
 const allowedOrigins = [
@@ -94,15 +52,35 @@ app.use(cors({
 // Pre-flight handling
 app.options('*', cors());
 
-// Health check endpoint
+// Health check endpoint with diagnostic telemetry
 app.get('/api/health', (req, res) => {
+  const fsStatus = db.getFirestoreStatus();
+  const paymentConfig = db.getPaymentSettings();
+
   res.json({
     status: 'ok',
     service: 'VINOTH BOOKS API',
+    version: '2.5.0',
     timestamp: new Date().toISOString(),
     corsAllowed: true,
-    firebaseAdminReady: Boolean(adminAuth),
-    port: PORT
+    firebase: {
+      adminConnected: fsStatus.serviceAccountConfigured,
+      firestoreActive: fsStatus.connected,
+      databaseMode: fsStatus.databaseMode,
+      databaseId: fsStatus.databaseId,
+      projectId: fsStatus.projectId,
+      serviceAccount: fsStatus.serviceAccountEmail,
+      initNotice: fsStatus.initError
+    },
+    payment: {
+      mode: paymentConfig.mode,
+      currency: paymentConfig.currency
+    },
+    environment: {
+      isRender: Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID),
+      port: PORT,
+      uptime: Math.round(process.uptime())
+    }
   });
 });
 
@@ -932,6 +910,74 @@ app.patch('/api/books/:id/status', requireAdmin, (req: Request, res: Response) =
     return res.status(404).json({ error: 'Book not found' });
   }
   res.json({ book: updated, message: `Book status set to ${status}` });
+});
+
+// Admin Preview and Original File Download
+app.get('/api/admin/books/:id/download-original', requireAdmin, (req: Request, res: Response) => {
+  const book = db.getBookById(req.params.id);
+  if (!book) return res.status(404).json({ error: 'Book not found' });
+
+  db.logActivity('ADMIN_DOWNLOAD_ORIGINAL', `Admin tested original manuscript for "${book.title}"`, (req as any).user.email, req.ip);
+
+  // If book has base64 data PDF
+  if (book.pdfUrl && book.pdfUrl.startsWith('data:application/pdf;base64,')) {
+    const base64Data = book.pdfUrl.replace('data:application/pdf;base64,', '');
+    const buffer = Buffer.from(base64Data, 'base64');
+    const sanitizedTitle = book.title.replace(/[^a-zA-Z0-9_-]/g, '_');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${sanitizedTitle}_Original.pdf"`);
+    return res.send(buffer);
+  }
+
+  // Master author edition manuscript
+  const sanitizedTitle = book.title.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const filename = `${sanitizedTitle}_MASTER_AUTHOR_EDITION.txt`;
+  const doc = `================================================================================
+VINOTH BOOKS — OFFICIAL PUBLISHER ORIGINAL MANUSCRIPT
+================================================================================
+TITLE: ${book.title.toUpperCase()}
+SUBTITLE: ${book.subtitle}
+AUTHOR/IMPRINT: ${book.author}
+CATEGORY: ${book.category}
+ISBN: ${book.isbn || 'N/A'}
+PAGES: ${book.pages}
+STATUS: ${book.status.toUpperCase()}
+PRICE: ${book.isFree ? 'FREE' : '₹' + book.sellingPrice}
+VERIFIED PUBLISHER INSPECTION COPY
+================================================================================
+TABLE OF CONTENTS:
+${book.tableOfContents.map((ch, i) => `${i + 1}. ${ch}`).join('\n')}
+
+KEY LEARNINGS:
+${book.keyLearnings.map((k, i) => `[${i + 1}] ${k}`).join('\n')}
+
+MANUSCRIPT CONTENT:
+${book.sampleContent.map(sc => `### ${sc.chapterTitle} ###\n\n${sc.content}\n\n`).join('\n--------------------------------------------------------------------------------\n')}
+================================================================================`;
+
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(doc);
+});
+
+// Admin Bulk Management: Safe Purge of Demo/Sample Books
+app.post('/api/admin/books/purge-demo', requireAdmin, (req: Request, res: Response) => {
+  const allBooks = db.getBooks();
+  const demoBooks = allBooks.filter(b => b.isDemoData === true);
+  const purgedIds: string[] = [];
+
+  for (const b of demoBooks) {
+    db.deleteBook(b.id);
+    purgedIds.push(b.id);
+  }
+
+  db.logActivity('PURGE_DEMO_BOOKS', `Admin safely removed ${purgedIds.length} sample/demo books from the live catalog.`, (req as any).user.email, req.ip);
+  res.json({
+    success: true,
+    count: purgedIds.length,
+    purgedIds,
+    message: `Successfully removed ${purgedIds.length} demo books. User-uploaded books were strictly preserved.`
+  });
 });
 
 // -------------------------------------------------------------

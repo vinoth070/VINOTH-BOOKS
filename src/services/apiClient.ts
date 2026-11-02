@@ -26,13 +26,16 @@ export class ApiError extends Error {
   }
 }
 
+export const DEFAULT_PRODUCTION_API_URL = 'https://vinoth-books-api.onrender.com';
+
 // Resolve API base URL: trim trailing slash
 export const getApiBaseUrl = (): string => {
   const envUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
   if (envUrl) {
     return envUrl.replace(/\/+$/, '');
   }
-  // If hosted on GitHub Pages or dev, check for user-saved backend URL (e.g. Render live instance)
+
+  // If user explicitly configured a custom backend in Admin Settings
   if (typeof window !== 'undefined') {
     try {
       const customUrl = localStorage.getItem('vb_custom_api_url');
@@ -40,7 +43,15 @@ export const getApiBaseUrl = (): string => {
         return customUrl.trim().replace(/\/+$/, '');
       }
     } catch {}
+
+    // When deployed on GitHub Pages or Vercel, automatically target the live Render backend
+    const host = window.location.hostname;
+    const isLocal = host === 'localhost' || host === '127.0.0.1' || host.includes('run.app');
+    if (!isLocal) {
+      return DEFAULT_PRODUCTION_API_URL;
+    }
   }
+
   return '';
 };
 

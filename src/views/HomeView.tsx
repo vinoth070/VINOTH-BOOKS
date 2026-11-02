@@ -7,6 +7,7 @@ import {
 import { Book, Category } from '../types';
 import { BookCard } from '../components/BookCard';
 import { apiClient } from '../services/apiClient';
+import { resolveBookCover } from '../utils/imageUrl';
 
 interface HomeViewProps {
   books: Book[];
@@ -247,10 +248,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     {/* Hardcover spine visual */}
                     <div className="book-card-spine w-full h-full relative">
                       <img
-                        src={book.coverImage}
+                        src={resolveBookCover(book.coverImage)}
                         alt={book.title}
                         referrerPolicy="no-referrer"
+                        loading="lazy"
                         className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const target = e.currentTarget as HTMLImageElement;
+                          if (!target.src.includes('unsplash.com')) {
+                            target.src = 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=600&q=80';
+                          }
+                        }}
                       />
 
                       {/* Foil Sheen */}

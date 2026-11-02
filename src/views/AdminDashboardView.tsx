@@ -5,7 +5,7 @@ import {
   Plus, Save, RefreshCw, DollarSign, ArrowUpRight, CheckCircle2, AlertCircle,
   FileText, Mail, Sparkles, Sliders, MessageSquare, Settings, CreditCard,
   LogOut, Shield, ShieldCheck, CheckSquare, CornerDownRight, Archive, AlertTriangle,
-  Upload, FileUp
+  Upload, FileUp, Download
 } from 'lucide-react';
 import {
   Book, Category, Order, Coupon, Review, CustomerFeedback,
@@ -381,6 +381,86 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       showNotification('error', err.message || 'Failed to delete book');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const [isPurgeModalOpen, setIsPurgeModalOpen] = useState(false);
+  const [isPurging, setIsPurging] = useState(false);
+
+  const demoBooksList = books.filter(b => b.isDemoData === true || (b.id.startsWith('book-') && !b.id.startsWith('book_')));
+
+  const handleDownloadOriginalBook = async (book: Book) => {
+    try {
+      showNotification('success', `Initiating original file download for "${book.title}"...`);
+      const token = localStorage.getItem('vb_token');
+      const downloadUrl = `${getApiBaseUrl()}/api/admin/books/${book.id}/download-original`;
+      const res = await fetch(downloadUrl, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const sanitized = book.title.replace(/[^a-zA-Z0-9_-]/g, '_');
+        a.download = `${sanitized}_MASTER_AUTHOR_EDITION.txt`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        showNotification('success', `Original book file downloaded for "${book.title}"`);
+        return;
+      }
+    } catch (e) {
+      console.warn('API original download note, falling back to local file generation:', e);
+    }
+
+    // Direct master author edition download
+    const sanitized = book.title.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const content = `VINOTH BOOKS — OFFICIAL MASTER AUTHOR EDITION\nTitle: ${book.title}\nSubtitle: ${book.subtitle}\nAuthor/Publisher: ${book.author}\nCategory: ${book.category}\nPages: ${book.pages}\nISBN: ${book.isbn || 'N/A'}\nPrice: ₹${book.sellingPrice}\n\n================================================================================\nTABLE OF CONTENTS:\n${(book.tableOfContents || []).map((ch, i) => `${i + 1}. ${ch}`).join('\n')}\n\nKEY LEARNING OUTCOMES:\n${(book.keyLearnings || []).map((k, i) => `[${i + 1}] ${k}`).join('\n')}\n\nMANUSCRIPT CONTENT:\n${(book.sampleContent || []).map(s => `### ${s.chapterTitle} ###\n\n${s.content}`).join('\n\n--------------------------------------------------------------------------------\n\n')}\n================================================================================\n`;
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${sanitized}_MASTER_AUTHOR_EDITION.txt`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    showNotification('success', `Master author file downloaded for "${book.title}"`);
+  };
+
+  const handlePurgeDemoBooks = async () => {
+    try {
+      setIsPurging(true);
+      const demoIds = demoBooksList.map(b => b.id);
+
+      // 1. Backend call
+      try {
+        await apiClient.post('/api/admin/books/purge-demo');
+      } catch (apiErr) {
+        console.warn('Backend purge note, applying local cleanup:', apiErr);
+      }
+
+      // 2. Mark demo books as deleted in localStorage so they don't reappear on static hostings
+      const deletedIds: string[] = JSON.parse(localStorage.getItem('vb_deleted_books') || '[]');
+      const updatedDeleted = Array.from(new Set([...deletedIds, ...demoIds]));
+      localStorage.setItem('vb_deleted_books', JSON.stringify(updatedDeleted));
+
+      // 3. Clear from custom books
+      const customBooks: Book[] = JSON.parse(localStorage.getItem('vb_custom_books') || '[]');
+      const filteredCustom = customBooks.filter((b: Book) => !demoIds.includes(b.id));
+      localStorage.setItem('vb_custom_books', JSON.stringify(filteredCustom));
+
+      showNotification('success', `Successfully removed ${demoIds.length} sample/demo books! Catalog is ready for your original works.`);
+      setIsPurgeModalOpen(false);
+      await onRefreshData();
+      await fetchAdminData();
+    } catch (err: any) {
+      showNotification('error', err.message || 'Failed to remove demo books');
+    } finally {
+      setIsPurging(false);
     }
   };
 
@@ -1037,6 +1117,32 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </button>
             </div>
 
+            {/* Safe Demo/Sample Books Bulk Management Alert */}
+            {demoBooksList.length > 0 && (
+              <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-amber-500/20 text-amber-500 shrink-0">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-[var(--text-primary)]">
+                      {demoBooksList.length} Sample / Demo Books in Catalog
+                    </h4>
+                    <p className="text-[11px] text-[var(--text-secondary)]">
+                      Ready to launch your own original books? You can safely review and bulk-remove the starter demo books with one click.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPurgeModalOpen(true)}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-[#0B1325] rounded-lg font-bold uppercase tracking-wider text-[11px] shrink-0 transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+                >
+                  Review & Remove Demo Books ({demoBooksList.length})
+                </button>
+              </div>
+            )}
+
             <div className="bg-white border border-[#E5DFD3] rounded-xl overflow-hidden shadow-2xs">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
@@ -1100,14 +1206,21 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           <div className="flex items-center justify-end gap-1.5">
                             <button
                               onClick={() => onOpenReader(book)}
-                              className="p-1.5 text-slate-500 hover:text-slate-800 rounded hover:bg-slate-100"
+                              className="p-1.5 text-slate-500 hover:text-slate-800 rounded hover:bg-slate-100 cursor-pointer"
                               title="Reader Preview"
                             >
                               <Eye className="w-4 h-4" />
                             </button>
                             <button
+                              onClick={() => handleDownloadOriginalBook(book)}
+                              className="p-1.5 text-emerald-600 hover:text-emerald-800 rounded hover:bg-emerald-50 cursor-pointer"
+                              title="Download Original Manuscript"
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+                            <button
                               onClick={() => handleEditBookClick(book)}
-                              className="p-1.5 text-blue-600 hover:text-blue-800 rounded hover:bg-blue-50"
+                              className="p-1.5 text-blue-600 hover:text-blue-800 rounded hover:bg-blue-50 cursor-pointer"
                               title="Edit Book Details"
                             >
                               <Edit3 className="w-4 h-4" />
@@ -2651,6 +2764,56 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </button>
               </div>
             </form>
+
+            {/* Backend API Connectivity & Cloud Diagnostic Card */}
+            <div className="p-6 bg-white border border-[#E5DFD3] rounded-xl shadow-2xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-serif text-base font-bold text-[#0B1325]">
+                    Production Backend & Cloud Connectivity
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Live endpoint: <code className="font-mono text-[#0B1325] bg-slate-100 px-1.5 py-0.5 rounded">{getApiBaseUrl() || window.location.origin}</code>
+                  </p>
+                </div>
+                <span className={`text-xs px-2.5 py-1 rounded-full font-bold flex items-center gap-1.5 ${
+                  isBackendConnected
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-amber-50 text-amber-800 border border-amber-200'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${isBackendConnected ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
+                  <span>{isBackendConnected ? 'Connected & Healthy' : 'Offline / Checking'}</span>
+                </span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <input
+                  type="text"
+                  value={backendUrlInput}
+                  onChange={(e) => setBackendUrlInput(e.target.value)}
+                  placeholder="https://vinoth-books-api.onrender.com"
+                  className="flex-1 px-3 py-2 text-xs bg-slate-50 border border-[#D5CDC0] rounded-md font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={handleConnectBackend}
+                  disabled={isTestingBackend}
+                  className="px-4 py-2 text-xs font-semibold uppercase tracking-wider bg-[#0B1325] text-white rounded-md hover:bg-[#1E293B] font-bold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isTestingBackend ? 'animate-spin' : ''}`} />
+                  <span>{isTestingBackend ? 'Testing...' : 'Test & Save Endpoint'}</span>
+                </button>
+              </div>
+
+              {backendTestStatus && (
+                <div className={`p-3 rounded-lg text-xs flex items-center gap-2 ${
+                  backendTestStatus.success ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'
+                }`}>
+                  {backendTestStatus.success ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                  <span>{backendTestStatus.message}</span>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -2873,6 +3036,68 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 className="px-5 py-2 text-xs font-bold uppercase tracking-wider rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-md cursor-pointer transition-colors"
               >
                 Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BULK DEMO BOOKS REMOVAL CONFIRMATION MODAL */}
+      {isPurgeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-[var(--bg-surface-card)] border border-amber-500/50 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center gap-3 text-amber-500">
+              <div className="w-11 h-11 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-6 h-6 text-amber-500" />
+              </div>
+              <div>
+                <h3 className="font-serif text-lg font-bold text-[var(--text-primary)]">Bulk Remove Sample/Demo Books?</h3>
+                <p className="text-xs text-[var(--text-muted)]">Clean store catalog to publish your original works.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+              This action will remove the <strong>{demoBooksList.length} initial starter demo eBooks</strong> from your storefront. Any books you have created or edited yourself will be strictly preserved.
+            </p>
+
+            {/* List of demo books being removed */}
+            <div className="max-h-48 overflow-y-auto divide-y divide-[var(--border-subtle)] border border-[var(--border-subtle)] rounded-xl p-2 bg-[var(--bg-surface-elevated)]">
+              {demoBooksList.map(b => (
+                <div key={b.id} className="py-2 px-2 flex items-center justify-between text-xs">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                    <span className="font-semibold text-[var(--text-primary)] truncate">{b.title}</span>
+                  </div>
+                  <span className="text-[10px] text-[var(--text-muted)] shrink-0 font-mono">
+                    {b.isFree ? 'FREE' : `₹${b.sellingPrice}`}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isPurging}
+                onClick={() => setIsPurgeModalOpen(false)}
+                className="px-4 py-2 text-xs font-semibold rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-muted)] text-[var(--text-secondary)] cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isPurging}
+                onClick={handlePurgeDemoBooks}
+                className="px-5 py-2 text-xs font-bold uppercase tracking-wider rounded-lg bg-amber-500 hover:bg-amber-600 text-[#0B1325] shadow-md cursor-pointer transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {isPurging ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Removing...</span>
+                  </>
+                ) : (
+                  <span>Confirm Bulk Removal</span>
+                )}
               </button>
             </div>
           </div>
