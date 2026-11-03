@@ -69,6 +69,20 @@ export interface User {
     newsletter?: boolean;
   };
   emailVerified?: boolean;
+  reading_progress?: Record<string, {
+    bookId?: string;
+    chapterIndex: number;
+    totalChapters?: number;
+    percent: number;
+    chapterTitle?: string;
+    updatedAt: string;
+  }>;
+  reading_goal?: {
+    target: number;
+    month: string;
+    completedCount?: number;
+    updatedAt: string;
+  };
   createdAt: string;
   updatedAt?: string;
 }
@@ -90,8 +104,12 @@ export interface Order {
   discount: number;
   couponCode?: string;
   total: number;
-  paymentStatus: 'paid' | 'pending' | 'failed' | 'cancelled' | 'captured' | 'settlement_initiated' | 'settlement_completed';
+  paymentStatus: 'paid' | 'pending' | 'failed' | 'cancelled' | 'captured' | 'settlement_initiated' | 'settlement_completed' | 'pending_verification' | 'rejected';
   paymentMethod?: string;
+  upiTransactionRef?: string;
+  upiReceiptUrl?: string;
+  verificationNote?: string;
+  rejectionReason?: string;
   settlementStatus?: 'pending' | 'processing' | 'settled';
   settlementId?: string;
   razorpayOrderId?: string;
@@ -101,6 +119,15 @@ export interface Order {
   paymentMode: 'test' | 'live';
   isDemoData?: boolean;
   createdAt: string;
+  updatedAt?: string;
+}
+
+export interface UpiPaymentConfig {
+  enabled: boolean;
+  upiId: string;
+  payeeName: string;
+  qrImageUrl?: string;
+  instructions?: string;
   updatedAt?: string;
 }
 
@@ -208,6 +235,7 @@ export interface DatabaseSchema {
   coupons: Coupon[];
   newsletter: { id: string; email: string; subscribedAt: string }[];
   paymentSettings: PaymentSettings;
+  upiSettings?: UpiPaymentConfig;
   websiteSettings: WebsiteSettings;
   legalPages: LegalPages;
   activityLogs: ActivityLog[];
@@ -710,6 +738,14 @@ By learning to pause at the threshold of reaction and run the mental simulation 
     isLiveConfirmed: false,
     updatedAt: new Date().toISOString()
   },
+  upiSettings: {
+    enabled: true,
+    upiId: process.env.MERCHANT_UPI_ID || 'vinothbooks@okhdfcbank',
+    payeeName: process.env.MERCHANT_PAYEE_NAME || 'VINOTH BOOKS',
+    qrImageUrl: '',
+    instructions: '1. Scan the QR code or transfer to our official UPI ID using GPay, PhonePe, Paytm, or BHIM.\n2. Pay the exact order amount.\n3. Enter the 12-digit UPI Reference Number / UTR below.\n4. Our team will verify and unlock your eBook in your library within minutes.',
+    updatedAt: new Date().toISOString()
+  },
   websiteSettings: {
     storeName: 'VINOTH BOOKS',
     tagline: 'Ideas Into Pages. Knowledge Without Limits.',
@@ -1148,11 +1184,14 @@ class DatabaseManager {
 
   public updateOrderStatus(
     orderId: string,
-    status: 'paid' | 'pending' | 'failed' | 'cancelled' | 'captured' | 'settlement_initiated' | 'settlement_completed',
+    status: 'paid' | 'pending' | 'failed' | 'cancelled' | 'captured' | 'settlement_initiated' | 'settlement_completed' | 'pending_verification' | 'rejected',
     paymentId?: string,
     extra?: {
       paymentMethod?: string;
       razorpaySignature?: string;
+      upiTransactionRef?: string;
+      verificationNote?: string;
+      rejectionReason?: string;
       settlementStatus?: 'pending' | 'processing' | 'settled';
       settlementId?: string;
     }
@@ -1164,6 +1203,9 @@ class DatabaseManager {
       if (paymentId) order.razorpayPaymentId = paymentId;
       if (extra?.paymentMethod) order.paymentMethod = extra.paymentMethod;
       if (extra?.razorpaySignature) order.razorpaySignature = extra.razorpaySignature;
+      if (extra?.upiTransactionRef) order.upiTransactionRef = extra.upiTransactionRef;
+      if (extra?.verificationNote) order.verificationNote = extra.verificationNote;
+      if (extra?.rejectionReason) order.rejectionReason = extra.rejectionReason;
       if (extra?.settlementStatus) order.settlementStatus = extra.settlementStatus;
       if (extra?.settlementId) order.settlementId = extra.settlementId;
 
@@ -1306,6 +1348,33 @@ class DatabaseManager {
       hasWebhookSecret: Boolean(ps.webhookSecret),
       updatedAt: ps.updatedAt
     };
+  }
+
+  // UPI Settings
+  public getUpiSettings(): UpiPaymentConfig {
+    if (!this.data.upiSettings) {
+      this.data.upiSettings = {
+        enabled: true,
+        upiId: process.env.MERCHANT_UPI_ID || 'vinothbooks@okhdfcbank',
+        payeeName: process.env.MERCHANT_PAYEE_NAME || 'VINOTH BOOKS',
+        qrImageUrl: '',
+        instructions: '1. Scan the QR code or transfer to our official UPI ID using GPay, PhonePe, Paytm, or BHIM.\n2. Pay the exact order amount.\n3. Enter the 12-digit UPI Reference Number / UTR below.\n4. Our team will verify and unlock your eBook in your library within minutes.',
+        updatedAt: new Date().toISOString()
+      };
+    }
+    return this.data.upiSettings;
+  }
+
+  public updateUpiSettings(settings: Partial<UpiPaymentConfig>): UpiPaymentConfig {
+    const current = this.getUpiSettings();
+    this.data.upiSettings = {
+      ...current,
+      ...settings,
+      updatedAt: new Date().toISOString()
+    };
+    this.save();
+    this.syncDoc('settings', 'payment_upi', this.data.upiSettings);
+    return this.data.upiSettings;
   }
 
   // Website Settings

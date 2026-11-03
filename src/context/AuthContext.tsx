@@ -69,7 +69,6 @@ export function isPasswordStrong(rules: PasswordValidationRules): boolean {
   );
 }
 
-const ADMIN_EMAILS = ['kalivinoselvikk@gmail.com', 'kalikalivino17@gmail.com'];
 
 interface AuthContextType {
   user: User | null;
@@ -134,14 +133,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setToken(null);
         setUser(null);
       } else if (auth.currentUser) {
-        // Fallback for GitHub Pages static mode or server offline
+        // Fallback for offline mode: strictly default to customer
         const fbUser = auth.currentUser;
-        const isAdm = ADMIN_EMAILS.includes(fbUser.email?.toLowerCase().trim() || '');
         const fallbackUser: User = {
           id: fbUser.uid,
           name: fbUser.displayName || 'Reader',
           email: fbUser.email || '',
-          role: isAdm ? 'admin' : 'customer',
+          role: 'customer',
           library: [],
           wishlist: [],
           emailVerified: fbUser.emailVerified,
@@ -193,14 +191,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       return data.user;
     } catch (err: any) {
-      // Graceful fallback for static GitHub Pages or server unreachable
-      const cleanEmail = (firebaseUser.email || '').toLowerCase().trim();
-      const isAdm = ADMIN_EMAILS.includes(cleanEmail);
+      // Graceful fallback for offline mode: strictly customer
       const clientUser: User = {
         id: firebaseUser.uid,
         name: firebaseUser.displayName || fallbackName || 'Reader',
         email: firebaseUser.email || '',
-        role: isAdm ? 'admin' : 'customer',
+        role: 'customer',
         library: [],
         wishlist: [],
         emailVerified: firebaseUser.emailVerified,
@@ -230,7 +226,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.warn('Firebase login check, checking backend credentials:', fbErr.message);
       }
 
-      // 2. Call backend login for verification & role resolution
+      // 2. Call backend login for verification & authoritative role resolution
       try {
         const data = await apiClient.post<{ token: string; user: User }>('/api/auth/login', {
           email: cleanEmail,
@@ -256,10 +252,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         return { success: true, user: data.user };
       } catch (apiErr: any) {
-        // If backend failed but Firebase Auth succeeded (e.g. static hosting on GitHub Pages)
+        // If backend failed but Firebase Auth succeeded (e.g. offline mode)
         if (fbUser) {
-          const isAdm = ADMIN_EMAILS.includes(cleanEmail.toLowerCase());
-          if (!isAdm && !fbUser.emailVerified) {
+          if (!fbUser.emailVerified) {
             setUnverifiedEmail(cleanEmail);
             return {
               success: false,
@@ -271,7 +266,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             id: fbUser.uid,
             name: fbUser.displayName || 'Reader',
             email: cleanEmail,
-            role: isAdm ? 'admin' : 'customer',
+            role: 'customer', // Strictly customer fallback
             library: [],
             wishlist: [],
             emailVerified: fbUser.emailVerified,

@@ -296,7 +296,14 @@ https://vinoth070.github.io/VINOTH-BOOKS/
         )}
 
         {currentView === 'orders' && (
-          <OrdersView onNavigate={navigateTo} />
+          <OrdersView
+            onNavigate={navigateTo}
+            onSelectBook={handleSelectBook}
+            onOpenReader={(bookId: string) => {
+              const book = books.find(b => b.id === bookId || (b as any).slug === bookId);
+              if (book) handleOpenReader(book);
+            }}
+          />
         )}
 
         {currentView === 'wishlist' && (
@@ -336,6 +343,35 @@ https://vinoth070.github.io/VINOTH-BOOKS/
                 onLogout={handleLogout}
               />
             </ErrorBoundary>
+          ) : user && !isAdmin ? (
+            /* Protected Route: Logged In as Non-Admin Customer */
+            <div className="max-w-md mx-auto py-24 px-4 text-center space-y-5 animate-in fade-in">
+              <div className="w-14 h-14 mx-auto rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-500 shadow-xs">
+                <Lock className="w-7 h-7" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="font-serif text-2xl font-bold text-[var(--text-primary)]">
+                  Access Denied (403)
+                </h2>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  Your customer account ({user.email}) does not have publisher administrator privileges. The Publisher Portal is strictly restricted to the authorized administrator.
+                </p>
+              </div>
+              <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                  onClick={() => navigateTo('library')}
+                  className="px-6 py-2.5 text-xs font-semibold uppercase tracking-wider bg-[var(--accent-gold)] text-[#0B1325] rounded-lg hover:bg-[var(--accent-gold-hover)] transition-colors shadow-xs flex items-center justify-center gap-2 cursor-pointer font-bold"
+                >
+                  <span>Go to Customer Dashboard</span>
+                </button>
+                <button
+                  onClick={() => navigateTo('home')}
+                  className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider border border-[var(--border-subtle)] text-[var(--text-primary)] rounded-lg hover:bg-[var(--bg-surface-muted)] transition-colors cursor-pointer"
+                >
+                  Return to Storefront
+                </button>
+              </div>
+            </div>
           ) : !user ? (
             /* Protected Route: Not Logged In */
             <div className="max-w-md mx-auto py-24 px-4 text-center space-y-5 animate-in fade-in">

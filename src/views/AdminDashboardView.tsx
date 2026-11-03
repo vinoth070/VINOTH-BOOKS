@@ -1,19 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard, BookPlus, BookOpen, FolderTree, ShoppingCart, Users, Tag,
   BarChart3, UserCheck, ShieldAlert, Check, X, Edit3, Trash2, Eye, EyeOff,
   Plus, Save, RefreshCw, DollarSign, ArrowUpRight, CheckCircle2, AlertCircle,
   FileText, Mail, Sparkles, Sliders, MessageSquare, Settings, CreditCard,
   LogOut, Shield, ShieldCheck, CheckSquare, CornerDownRight, Archive, AlertTriangle,
-  Upload, FileUp, Download
+  Upload, FileUp, Download, QrCode, Copy
 } from 'lucide-react';
 import {
   Book, Category, Order, Coupon, Review, CustomerFeedback,
-  PaymentSettingsPublic, WebsiteSettings, AnalyticsSummary, ActivityLog
+  PaymentSettingsPublic, WebsiteSettings, AnalyticsSummary, ActivityLog, UpiPaymentConfig
 } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { apiClient, getApiBaseUrl } from '../services/apiClient';
 import { resolveBookCover } from '../utils/imageUrl';
+import { db } from '../firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import {
   FALLBACK_ANALYTICS, FALLBACK_PAYMENT_CONFIG, FALLBACK_WEB_SETTINGS,
   FALLBACK_ORDERS, FALLBACK_CUSTOMERS, FALLBACK_COUPONS,
@@ -52,6 +54,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     | 'feedback'
     | 'coupons'
     | 'payment-settings'
+    | 'payment-verification'
     | 'website-settings'
     | 'activity-logs'
   >('overview');
@@ -96,6 +99,25 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
   // Website settings state
   const [webSettings, setWebSettings] = useState<WebsiteSettings>(FALLBACK_WEB_SETTINGS);
+
+  // Direct UPI Payment Settings state
+  const [upiSettings, setUpiSettings] = useState<UpiPaymentConfig>({
+    enabled: true,
+    upiId: 'vinothbooks@okhdfcbank',
+    payeeName: 'VINOTH BOOKS',
+    qrImageUrl: '',
+    instructions: '1. Scan the QR code or transfer to our official UPI ID using GPay, PhonePe, Paytm, or BHIM.\n2. Pay the exact order amount.\n3. Enter the 12-digit UPI Reference Number / UTR below.\n4. Our team will verify and unlock your eBook in your library within minutes.',
+    updatedAt: new Date().toISOString()
+  });
+  const [isSavingUpi, setIsSavingUpi] = useState(false);
+  const [verifyingOrderId, setVerifyingOrderId] = useState<string | null>(null);
+
+  // QR Code upload & Payment Verification state
+  const [isUploadingQr, setIsUploadingQr] = useState(false);
+  const qrFileInputRef = useRef<HTMLInputElement>(null);
+  const [verificationFilter, setVerificationFilter] = useState<'pending' | 'paid' | 'rejected' | 'all'>('pending');
+  const [verificationNotes, setVerificationNotes] = useState<Record<string, string>>({});
+  const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
 
   // Backend Connectivity & Diagnostic State
   const [isBackendConnected, setIsBackendConnected] = useState<boolean | null>(null);
@@ -201,6 +223,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       }
       if (resWeb.status === 'fulfilled' && resWeb.value?.settings) setWebSettings(resWeb.value.settings);
       if (resLogs.status === 'fulfilled' && resLogs.value?.logs) setActivityLogs(resLogs.value.logs);
+
+      // Fetch Direct UPI configuration
+      apiClient.get<UpiPaymentConfig>('/api/admin/payment-settings/upi')
+        .then(upiData => { if (upiData) setUpiSettings(upiData); })
+        .catch(() => {});
     } catch (err) {
       console.warn('Admin dataset fetch notice, using verified fallback data:', err);
       setIsBackendConnected(false);
@@ -693,6 +720,114 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }
   };
 
+  // Direct UPI Payment Settings Handlers
+  const handleSaveUpiSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setIsSavingUpi(true);
+      await apiClient.post('/api/admin/payment-settings/upi', upiSettings);
+      try {
+        await setDoc(doc(db, 'settings', 'payment_upi'), upiSettings, { merge: true });
+      } catch (e: any) {
+        console.warn('Firestore UPI settings sync note:', e.message);
+      }
+      showNotification('success', 'Direct UPI payment settings updated and synced!');
+    } catch (err: any) {
+      showNotification('error', err.message || 'Failed to save UPI settings');
+    } finally {
+      setIsSavingUpi(false);
+    }
+  };
+
+  const handleQrFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    if (!allowedTypes.includes(file.type.toLowerCase())) {
+      showNotification('error', 'Only PNG, JPG, JPEG, and WEBP formats are supported for QR codes.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      showNotification('error', 'QR Code image size must be 5MB or less.');
+      return;
+    }
+
+    try {
+      setIsUploadingQr(true);
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const base64 = reader.result as string;
+          const res = await apiClient.post<{ success: boolean; qrImageUrl: string; message: string }>('/api/admin/payment-settings/upload-qr', {
+            imageData: base64,
+            contentType: file.type
+          });
+
+          if (res?.qrImageUrl) {
+            setUpiSettings(prev => ({ ...prev, qrImageUrl: res.qrImageUrl }));
+            showNotification('success', res.message || 'Original QR Code image uploaded and activated!');
+          }
+        } catch (err: any) {
+          showNotification('error', err.message || 'Failed to upload QR Code image');
+        } finally {
+          setIsUploadingQr(false);
+          if (qrFileInputRef.current) qrFileInputRef.current.value = '';
+        }
+      };
+      reader.onerror = () => {
+        showNotification('error', 'Failed to read QR image file from device');
+        setIsUploadingQr(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err: any) {
+      showNotification('error', err.message || 'Failed to process file');
+      setIsUploadingQr(false);
+    }
+  };
+
+  const handleRemoveQrImage = async () => {
+    try {
+      setIsUploadingQr(true);
+      await apiClient.post('/api/admin/payment-settings/remove-qr', {});
+      setUpiSettings(prev => ({ ...prev, qrImageUrl: '' }));
+      showNotification('success', 'Custom QR Code removed. Switched to dynamic vector QR.');
+    } catch (err: any) {
+      showNotification('error', err.message || 'Failed to remove QR Code');
+    } finally {
+      setIsUploadingQr(false);
+    }
+  };
+
+  const handleVerifyUpiOrder = async (orderId: string) => {
+    try {
+      setVerifyingOrderId(orderId);
+      const note = verificationNotes[orderId] || 'Payment verified via bank statement / UTR record';
+      await apiClient.post(`/api/admin/orders/${orderId}/verify-upi`, { note });
+      showNotification('success', `Order ${orderId} approved! Payment marked PAID and books unlocked in customer library.`);
+      await fetchAdminData();
+    } catch (err: any) {
+      showNotification('error', err.message || 'Failed to verify UPI order');
+    } finally {
+      setVerifyingOrderId(null);
+    }
+  };
+
+  const handleRejectUpiOrder = async (orderId: string) => {
+    try {
+      setVerifyingOrderId(orderId);
+      const reason = rejectionReasons[orderId]?.trim() || 'Bank reference (UTR) could not be verified in merchant account';
+      await apiClient.post(`/api/admin/orders/${orderId}/reject-upi`, { reason, note: reason });
+      showNotification('success', `Order ${orderId} rejected. Customer books remain locked.`);
+      await fetchAdminData();
+    } catch (err: any) {
+      showNotification('error', err.message || 'Failed to reject UPI order');
+    } finally {
+      setVerifyingOrderId(null);
+    }
+  };
+
   // Website Settings Actions
   const handleSaveWebSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -768,7 +903,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </button>
           </div>
 
-          {/* 13 Navigation Items */}
+          {/* 14 Navigation Items */}
           <nav className={`p-3 space-y-1 text-xs ${mobileNavExpanded ? 'block' : 'hidden lg:block'}`}>
             {[
               { id: 'overview', label: '1. Overview', icon: LayoutDashboard },
@@ -782,8 +917,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               { id: 'feedback', label: `9. Customer Feedback (${feedbacks.length})`, icon: MessageSquare },
               { id: 'coupons', label: `10. Coupons (${coupons.length})`, icon: Tag },
               { id: 'payment-settings', label: '11. Payment Settings', icon: CreditCard },
-              { id: 'website-settings', label: '12. Website Settings', icon: Settings },
-              { id: 'activity-logs', label: `13. Security & Activity Logs (${activityLogs.length})`, icon: ShieldCheck }
+              {
+                id: 'payment-verification',
+                label: `12. Payment Verification${orders.filter(o => o.paymentStatus === 'pending_verification').length > 0 ? ` (${orders.filter(o => o.paymentStatus === 'pending_verification').length})` : ''}`,
+                icon: CheckCircle2
+              },
+              { id: 'website-settings', label: '13. Website Settings', icon: Settings },
+              { id: 'activity-logs', label: `14. Security & Activity Logs (${activityLogs.length})`, icon: ShieldCheck }
             ].map(item => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -1828,8 +1968,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                       <th className="py-3 px-3">Amount</th>
                       <th className="py-3 px-3">Status</th>
                       <th className="py-3 px-3">Mode</th>
-                      <th className="py-3 px-3">Transaction Ref</th>
+                      <th className="py-3 px-3">Transaction / UTR</th>
                       <th className="py-3 px-3">Date</th>
+                      <th className="py-3 px-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E5DFD3]/60">
@@ -1849,21 +1990,68 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         </td>
                         <td className="py-3 px-3 font-bold tabular-nums">₹{o.total}</td>
                         <td className="py-3 px-3">
-                          <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold ${
-                            o.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                            o.paymentStatus === 'paid'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : o.paymentStatus === 'pending_verification'
+                              ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                              : o.paymentStatus === 'failed'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-slate-100 text-slate-800'
                           }`}>
-                            {o.paymentStatus.toUpperCase()}
+                            {o.paymentStatus === 'pending_verification' ? 'PENDING UPI' : o.paymentStatus.toUpperCase()}
                           </span>
                         </td>
                         <td className="py-3 px-3 font-mono text-[11px]">
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                            o.paymentMode === 'live' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-slate-100 text-slate-600'
+                            o.paymentMethod === 'upi_qr'
+                              ? 'bg-purple-50 text-purple-800 border border-purple-200'
+                              : o.paymentMode === 'live'
+                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                              : 'bg-slate-100 text-slate-600'
                           }`}>
-                            {o.paymentMode?.toUpperCase() || 'TEST'}
+                            {o.paymentMethod === 'upi_qr' ? 'DIRECT UPI' : o.paymentMode?.toUpperCase() || 'TEST'}
                           </span>
                         </td>
-                        <td className="py-3 px-3 font-mono text-slate-500">{o.transactionReference}</td>
+                        <td className="py-3 px-3 font-mono text-slate-700">
+                          {o.upiTransactionRef ? (
+                            <span className="font-bold text-[#B38A38] bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                              {o.upiTransactionRef}
+                            </span>
+                          ) : (
+                            o.transactionReference
+                          )}
+                        </td>
                         <td className="py-3 px-3 text-slate-400">{new Date(o.createdAt).toLocaleDateString()}</td>
+                        <td className="py-3 px-3 text-right">
+                          {o.paymentStatus === 'pending_verification' ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                disabled={verifyingOrderId === o.id}
+                                onClick={() => handleVerifyUpiOrder(o.id)}
+                                className="px-2 py-1 text-[10px] font-bold rounded bg-emerald-600 text-white hover:bg-emerald-500 shadow-xs cursor-pointer disabled:opacity-50"
+                              >
+                                {verifyingOrderId === o.id ? 'Verifying...' : 'Verify & Unlock'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={verifyingOrderId === o.id}
+                                onClick={() => handleRejectUpiOrder(o.id)}
+                                className="px-2 py-1 text-[10px] font-bold rounded bg-red-100 text-red-700 hover:bg-red-200 cursor-pointer disabled:opacity-50"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          ) : o.paymentStatus === 'paid' ? (
+                            <span className="text-[10px] text-emerald-600 font-semibold flex items-center justify-end gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Unlocked</span>
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">—</span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -2701,6 +2889,190 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </button>
             </div>
 
+            {/* Direct UPI & Standalone QR Settings Card */}
+            <div className="p-6 bg-white border border-[#E5DFD3] rounded-xl space-y-4 shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E5DFD3]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-[#B38A38]">
+                    <QrCode className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-serif text-base font-bold text-[#0B1325]">
+                      Direct UPI & Standalone QR Payment Settings
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Enable direct peer-to-merchant UPI payments with 12-digit UTR reference validation.
+                    </p>
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-2 cursor-pointer bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={upiSettings.enabled}
+                    onChange={e => setUpiSettings(prev => ({ ...prev, enabled: e.target.checked }))}
+                    className="rounded text-[#0B1325]"
+                  />
+                  <span className="text-xs font-bold text-slate-800">
+                    {upiSettings.enabled ? 'Direct UPI Active' : 'Direct UPI Disabled'}
+                  </span>
+                </label>
+              </div>
+
+              <form onSubmit={handleSaveUpiSettings} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Merchant Payee Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={upiSettings.payeeName}
+                      onChange={e => setUpiSettings(prev => ({ ...prev, payeeName: e.target.value }))}
+                      placeholder="e.g. VINOTH BOOKS"
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-[#D5CDC0] rounded-md font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Merchant UPI ID (VPA)
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={upiSettings.upiId}
+                      onChange={e => setUpiSettings(prev => ({ ...prev, upiId: e.target.value.trim() }))}
+                      placeholder="e.g. vinothbooks@okhdfcbank"
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-[#D5CDC0] rounded-md font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* Merchant QR Code Management (Device Upload, Preview, Replace, Remove) */}
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <QrCode className="w-4 h-4 text-[#C5A059]" />
+                        <span>Merchant UPI QR Code Image</span>
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        Upload your official bank / merchant UPI QR code image from your device.
+                      </p>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded self-start sm:self-auto ${
+                      upiSettings.qrImageUrl ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'
+                    }`}>
+                      {upiSettings.qrImageUrl ? 'Original Uploaded QR Active' : 'Dynamic Vector QR Active'}
+                    </span>
+                  </div>
+
+                  {/* Hidden file input for device upload */}
+                  <input
+                    ref={qrFileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    onChange={handleQrFileUpload}
+                    className="hidden"
+                  />
+
+                  <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
+                    {/* QR Code Preview */}
+                    <div className="relative group p-2 bg-white rounded-xl shadow-xs border border-slate-200 shrink-0 text-center">
+                      <img
+                        src={
+                          upiSettings.qrImageUrl ||
+                          `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`upi://pay?pa=${upiSettings.upiId || 'vinothbooks@okhdfcbank'}&pn=${encodeURIComponent(upiSettings.payeeName || 'VINOTH BOOKS')}&cu=INR`)}`
+                        }
+                        alt="Merchant UPI QR Preview"
+                        className="w-28 h-28 sm:w-32 sm:h-32 object-contain rounded"
+                      />
+                      <span className="text-[9px] font-bold text-slate-500 mt-1 block uppercase">
+                        {upiSettings.qrImageUrl ? 'Uploaded QR' : 'Auto Generated'}
+                      </span>
+                    </div>
+
+                    {/* QR Actions & URL Fallback */}
+                    <div className="space-y-3 flex-1 w-full min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={isUploadingQr}
+                          onClick={() => qrFileInputRef.current?.click()}
+                          className="px-3.5 py-2 text-xs font-bold bg-[#0B1325] text-white hover:bg-[#1E293B] rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>{upiSettings.qrImageUrl ? 'Replace QR Image' : 'Upload QR from Device'}</span>
+                        </button>
+
+                        {upiSettings.qrImageUrl && (
+                          <button
+                            type="button"
+                            disabled={isUploadingQr}
+                            onClick={handleRemoveQrImage}
+                            className="px-3 py-2 text-xs font-bold bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Remove QR Image</span>
+                          </button>
+                        )}
+                      </div>
+
+                      <p className="text-[11px] text-slate-500">
+                        Supports PNG, JPG, JPEG, and WEBP (Max 5MB). Persistently stored and synced to Firestore.
+                      </p>
+
+                      {/* Optional direct URL input */}
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                          Or specify external QR image URL:
+                        </label>
+                        <input
+                          type="url"
+                          value={upiSettings.qrImageUrl || ''}
+                          onChange={e => setUpiSettings(prev => ({ ...prev, qrImageUrl: e.target.value.trim() }))}
+                          placeholder="https://... or upload from device above"
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#D5CDC0] rounded-md font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Customer Payment Instructions
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={upiSettings.instructions || ''}
+                    onChange={e => setUpiSettings(prev => ({ ...prev, instructions: e.target.value }))}
+                    placeholder="Instructions displayed to users during Direct UPI checkout"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-[#D5CDC0] rounded-md"
+                  />
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="submit"
+                    disabled={isSavingUpi}
+                    className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider bg-[#0B1325] text-white hover:bg-[#1E293B] rounded-md shadow-sm font-bold flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSavingUpi ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Saving UPI Configuration...</span>
+                      </>
+                    ) : (
+                      <span>Save Direct UPI Configuration</span>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+
             {/* Security Architecture Notes */}
             <div className="p-5 bg-[#F5F0E8] border border-[#E5DFD3] rounded-xl space-y-2 text-xs text-slate-700">
               <h4 className="font-bold text-[#0B1325] flex items-center gap-1.5">
@@ -2716,7 +3088,313 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </div>
         )}
 
-        {/* TAB 12: WEBSITE SETTINGS */}
+        {/* TAB 12: PAYMENT VERIFICATION (DIRECT UPI UTR VERIFICATION QUEUE) */}
+        {activeTab === 'payment-verification' && (
+          <div className="max-w-6xl space-y-6 animate-in fade-in">
+            {/* Header */}
+            <div className="space-y-1 pb-4 border-b border-[#E5DFD3]">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs uppercase tracking-widest text-[#C5A059] font-semibold block">
+                    Direct UPI & Bank Settlement Verification
+                  </span>
+                  <h1 className="font-serif text-3xl font-bold text-[#0B1325]">
+                    Payment Verification Queue
+                  </h1>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchAdminData}
+                  className="px-3.5 py-1.5 text-xs font-bold bg-white border border-[#D5CDC0] text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                  <span>Refresh Queue</span>
+                </button>
+              </div>
+              <p className="text-xs text-slate-500">
+                Cross-reference customer submitted 12-digit UTR numbers against your official banking records. Approving unlocks purchased eBooks in the customer&apos;s library immediately.
+              </p>
+            </div>
+
+            {/* Quick Metrics Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div className="p-4 bg-white border border-amber-200 rounded-xl shadow-2xs">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700 block">Pending Verification</span>
+                <span className="font-serif text-2xl font-bold text-amber-900 mt-1 block">
+                  {orders.filter(o => o.paymentStatus === 'pending_verification').length}
+                </span>
+                <span className="text-[10px] text-amber-600 mt-0.5 block">Requires bank cross-check</span>
+              </div>
+
+              <div className="p-4 bg-white border border-emerald-200 rounded-xl shadow-2xs">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 block">Approved & Unlocked</span>
+                <span className="font-serif text-2xl font-bold text-emerald-900 mt-1 block">
+                  {orders.filter(o => (o.paymentMethod === 'upi_qr' || Boolean(o.upiTransactionRef)) && (o.paymentStatus === 'paid' || o.paymentStatus === 'captured')).length}
+                </span>
+                <span className="text-[10px] text-emerald-600 mt-0.5 block">eBooks active in library</span>
+              </div>
+
+              <div className="p-4 bg-white border border-red-200 rounded-xl shadow-2xs">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-red-700 block">Rejected / Declined</span>
+                <span className="font-serif text-2xl font-bold text-red-900 mt-1 block">
+                  {orders.filter(o => o.paymentStatus === 'rejected').length}
+                </span>
+                <span className="text-[10px] text-red-600 mt-0.5 block">Books remain locked</span>
+              </div>
+
+              <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700 block">Total UPI Volume</span>
+                <span className="font-serif text-2xl font-bold text-[#0B1325] mt-1 block">
+                  ₹{orders
+                    .filter(o => (o.paymentMethod === 'upi_qr' || Boolean(o.upiTransactionRef)) && (o.paymentStatus === 'paid' || o.paymentStatus === 'captured'))
+                    .reduce((acc, o) => acc + o.total, 0)
+                    .toLocaleString('en-IN')}
+                </span>
+                <span className="text-[10px] text-slate-500 mt-0.5 block">Authoritative verified total</span>
+              </div>
+            </div>
+
+            {/* Filter Tabs */}
+            <div className="flex flex-wrap items-center gap-2 border-b border-[#E5DFD3] pb-3">
+              {[
+                { id: 'pending', label: `Pending Verification (${orders.filter(o => o.paymentStatus === 'pending_verification').length})` },
+                { id: 'paid', label: `Approved / Paid (${orders.filter(o => (o.paymentMethod === 'upi_qr' || Boolean(o.upiTransactionRef)) && (o.paymentStatus === 'paid' || o.paymentStatus === 'captured')).length})` },
+                { id: 'rejected', label: `Rejected (${orders.filter(o => o.paymentStatus === 'rejected').length})` },
+                { id: 'all', label: `All UPI Orders (${orders.filter(o => o.paymentMethod === 'upi_qr' || Boolean(o.upiTransactionRef)).length})` }
+              ].map(f => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setVerificationFilter(f.id as any)}
+                  className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    verificationFilter === f.id
+                      ? 'bg-[#0B1325] text-white shadow-xs'
+                      : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Orders List */}
+            {(() => {
+              const filteredOrders = orders.filter(o => {
+                const isUpi = o.paymentMethod === 'upi_qr' || Boolean(o.upiTransactionRef) || o.paymentStatus === 'pending_verification' || o.paymentStatus === 'rejected';
+                if (!isUpi) return false;
+                if (verificationFilter === 'pending') return o.paymentStatus === 'pending_verification';
+                if (verificationFilter === 'paid') return o.paymentStatus === 'paid' || o.paymentStatus === 'captured';
+                if (verificationFilter === 'rejected') return o.paymentStatus === 'rejected';
+                return true;
+              });
+
+              if (filteredOrders.length === 0) {
+                return (
+                  <div className="p-12 text-center bg-white border border-[#E5DFD3] rounded-2xl space-y-3">
+                    <CheckCircle2 className="w-12 h-12 text-slate-300 mx-auto" />
+                    <h3 className="font-serif text-lg font-bold text-slate-700">No Orders in this View</h3>
+                    <p className="text-xs text-slate-500 max-w-md mx-auto">
+                      {verificationFilter === 'pending'
+                        ? 'All submitted UPI payments have been verified. Great job!'
+                        : 'No orders match the selected verification filter.'}
+                    </p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-4">
+                  {filteredOrders.map(order => {
+                    const isPending = order.paymentStatus === 'pending_verification';
+                    const isPaid = order.paymentStatus === 'paid' || order.paymentStatus === 'captured';
+                    const isRejected = order.paymentStatus === 'rejected';
+
+                    return (
+                      <div
+                        key={order.id}
+                        className={`bg-white border rounded-2xl shadow-xs overflow-hidden transition-all ${
+                          isPending
+                            ? 'border-amber-300 ring-1 ring-amber-200'
+                            : isPaid
+                            ? 'border-emerald-200'
+                            : 'border-slate-200 opacity-90'
+                        }`}
+                      >
+                        {/* Order Header */}
+                        <div className="px-5 py-3.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <span className="font-mono text-xs font-bold text-slate-900 bg-white px-2.5 py-1 rounded border border-slate-200">
+                              {order.id}
+                            </span>
+                            <span className="text-xs text-slate-500">
+                              Submitted: {new Date(order.createdAt).toLocaleString('en-IN', {
+                                dateStyle: 'medium',
+                                timeStyle: 'short'
+                              })}
+                            </span>
+                          </div>
+
+                          {/* Status Badge */}
+                          <div className="flex items-center gap-2">
+                            {isPending && (
+                              <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1.5">
+                                <AlertCircle className="w-3.5 h-3.5" />
+                                <span>Verification Pending</span>
+                              </span>
+                            )}
+                            {isPaid && (
+                              <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Approved · Paid & eBooks Unlocked</span>
+                              </span>
+                            )}
+                            {isRejected && (
+                              <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-red-100 text-red-800 border border-red-300 flex items-center gap-1.5">
+                                <X className="w-3.5 h-3.5" />
+                                <span>Rejected · Books Locked</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Order Body */}
+                        <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-6">
+                          {/* Column 1: Customer Details */}
+                          <div className="space-y-2 text-xs">
+                            <span className="font-bold text-slate-700 uppercase tracking-wider text-[10px] block">
+                              Customer Details
+                            </span>
+                            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                              <p className="font-bold text-slate-900 text-sm">{order.customerName}</p>
+                              <p className="text-slate-600 font-mono text-[11px]">{order.customerEmail}</p>
+                              <p className="text-slate-400 text-[10px]">User ID: {order.userId}</p>
+                            </div>
+                          </div>
+
+                          {/* Column 2: eBooks Purchased & Amount */}
+                          <div className="space-y-2 text-xs">
+                            <span className="font-bold text-slate-700 uppercase tracking-wider text-[10px] block">
+                              eBooks Ordered ({order.items.length})
+                            </span>
+                            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2 max-h-32 overflow-y-auto">
+                              {order.items.map((item, idx) => (
+                                <div key={idx} className="flex items-center gap-2.5 text-xs">
+                                  <img
+                                    src={resolveBookCover(item.coverImage)}
+                                    alt={item.title}
+                                    className="w-7 h-10 object-cover rounded shadow-2xs shrink-0"
+                                  />
+                                  <div className="min-w-0 flex-1 truncate">
+                                    <p className="font-bold text-slate-900 truncate">{item.title}</p>
+                                    <p className="text-[10px] text-slate-500 font-mono">₹{item.price}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="flex items-center justify-between pt-1 text-xs font-bold text-slate-900">
+                              <span>Expected Bank Transfer Amount:</span>
+                              <span className="font-serif text-base text-[#B38A38]">₹{order.total}</span>
+                            </div>
+                          </div>
+
+                          {/* Column 3: Submitted UTR & Verification Actions */}
+                          <div className="space-y-2 text-xs">
+                            <span className="font-bold text-slate-700 uppercase tracking-wider text-[10px] block">
+                              Payment Reference (UTR)
+                            </span>
+                            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                              <div>
+                                <span className="text-[10px] text-slate-500 block">Submitted 12-Digit Reference</span>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="font-mono font-bold text-sm text-[#0B1325] bg-white px-2 py-1 rounded border border-slate-300 flex-1 tracking-wider select-all">
+                                    {order.upiTransactionRef || order.transactionReference || 'N/A'}
+                                  </span>
+                                  {order.upiTransactionRef && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(order.upiTransactionRef || '');
+                                        showNotification('success', 'UTR reference copied to clipboard');
+                                      }}
+                                      className="p-1.5 bg-white border border-slate-300 hover:bg-slate-100 rounded text-slate-700 cursor-pointer"
+                                      title="Copy UTR"
+                                    >
+                                      <Copy className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {order.verificationNote && (
+                                <p className="text-[11px] text-slate-600 bg-white p-2 rounded border border-slate-200">
+                                  <strong>Admin Note:</strong> {order.verificationNote}
+                                </p>
+                              )}
+
+                              {order.rejectionReason && (
+                                <p className="text-[11px] text-red-600 bg-red-50 p-2 rounded border border-red-200">
+                                  <strong>Decline Reason:</strong> {order.rejectionReason}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Order Verification Controls (for Pending Orders) */}
+                        {isPending && (
+                          <div className="px-5 py-3.5 bg-amber-50/60 border-t border-amber-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                            <div className="w-full sm:w-1/2">
+                              <input
+                                type="text"
+                                placeholder="Optional verification note (e.g. Confirmed in bank at 11:45 AM)"
+                                value={verificationNotes[order.id] || ''}
+                                onChange={e => setVerificationNotes({ ...verificationNotes, [order.id]: e.target.value })}
+                                className="w-full px-3 py-1.5 text-xs bg-white border border-amber-300 rounded-lg text-slate-800 placeholder-slate-400"
+                              />
+                            </div>
+
+                            <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+                              <button
+                                type="button"
+                                disabled={verifyingOrderId === order.id}
+                                onClick={() => handleRejectUpiOrder(order.id)}
+                                className="px-4 py-2 text-xs font-bold bg-white text-red-700 hover:bg-red-50 border border-red-300 rounded-lg transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                                <span>Reject Payment</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={verifyingOrderId === order.id}
+                                onClick={() => handleVerifyUpiOrder(order.id)}
+                                className="px-5 py-2 text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg transition-colors cursor-pointer shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+                              >
+                                {verifyingOrderId === order.id ? (
+                                  <>
+                                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    <span>Verifying & Unlocking...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>Approve & Unlock eBooks</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* TAB 13: WEBSITE SETTINGS */}
         {activeTab === 'website-settings' && (
           <div className="max-w-4xl space-y-6 animate-in fade-in">
             <div className="space-y-1 pb-4 border-b border-[#E5DFD3]">

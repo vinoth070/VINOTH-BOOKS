@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Book, CartItem } from '../types';
+import { Book, CartItem, Order } from '../types';
 import { apiClient } from '../services/apiClient';
 
 interface CartContextType {
@@ -11,6 +11,9 @@ interface CartContextType {
   setIsCartOpen: (open: boolean) => void;
   isCheckoutOpen: boolean;
   setIsCheckoutOpen: (open: boolean) => void;
+  retryOrder: Order | null;
+  retryPayment: (order: Order) => void;
+  cancelRetry: () => void;
   appliedCoupon: { code: string; discount: number; message?: string } | null;
   applyCoupon: (code: string) => Promise<{ success: boolean; message: string }>;
   removeCoupon: () => void;
@@ -35,7 +38,17 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [retryOrder, setRetryOrder] = useState<Order | null>(null);
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number; message?: string } | null>(null);
+
+  const retryPayment = (order: Order) => {
+    setRetryOrder(order);
+    setIsCheckoutOpen(true);
+  };
+
+  const cancelRetry = () => {
+    setRetryOrder(null);
+  };
 
   useEffect(() => {
     try {
@@ -140,6 +153,9 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsCartOpen,
         isCheckoutOpen,
         setIsCheckoutOpen,
+        retryOrder,
+        retryPayment,
+        cancelRetry,
         appliedCoupon,
         applyCoupon,
         removeCoupon,

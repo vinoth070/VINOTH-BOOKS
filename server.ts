@@ -143,23 +143,29 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (fbDecoded && fbDecoded.email) {
     const cleanEmail = fbDecoded.email.toLowerCase().trim();
     let user = db.getUserByEmail(cleanEmail);
+    const isAuthAdmin = isAuthorizedAdmin({ uid: fbDecoded.uid, email: cleanEmail });
     if (!user) {
-      const isAdmin = isAdminEmail(cleanEmail);
       const salt = generateSalt();
       user = {
         id: fbDecoded.uid,
-        name: fbDecoded.name || (isAdmin ? 'Vinoth (Administrator)' : 'Verified Reader'),
+        name: fbDecoded.name || (isAuthAdmin ? 'Vinoth (Administrator)' : 'Verified Reader'),
         email: cleanEmail,
         passwordHash: hashPassword(fbDecoded.uid, salt),
         salt,
-        role: isAdmin ? 'admin' : 'customer',
-        library: isAdmin
+        role: isAuthAdmin ? 'admin' : 'customer',
+        library: isAuthAdmin
           ? ['book-ai-mind', 'book-wealth-playbook', 'book-deep-focus', 'book-digital-product-blueprint', 'book-systematic-thinking']
           : ['book-digital-product-blueprint'],
         wishlist: [],
         createdAt: new Date().toISOString()
       };
       db.addUser(user);
+    } else {
+      // Security: Ensure unauthorized users cannot retain admin privileges
+      if (!isAuthAdmin && user.role === 'admin') {
+        user.role = 'customer';
+        db.save();
+      }
     }
     (req as any).user = user;
     (req as any).firebaseUser = fbDecoded;
@@ -172,8 +178,14 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   requireAuth(req, res, () => {
     const user = (req as any).user as User;
-    if (user.role !== 'admin') {
-      return res.status(403).json({ error: 'Forbidden: Publisher Administrator access required' });
+    if (!user || user.role !== 'admin' || !isAuthorizedAdmin(user)) {
+      db.logActivity(
+        'UNAUTHORIZED_ADMIN_BLOCKED',
+        `Access Denied: Blocked unauthorized account ${user?.email || 'anonymous'} from accessing admin endpoint ${req.originalUrl}`,
+        user?.email,
+        req.ip
+      );
+      return res.status(403).json({ error: 'Access Denied: 403 Forbidden. Administrator privileges required.' });
     }
     next();
   });
@@ -197,10 +209,45 @@ async function optionalAuth(req: Request, res: Response, next: NextFunction) {
 }
 
 // -------------------------------------------------------------
-// DEDICATED ADMIN & UNIFIED AUTHENTICATION
+// SECURE SINGLE AUTHORIZED ADMINISTRATOR SPECIFICATION
 // -------------------------------------------------------------
-const CONFIGURED_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'kalivinoselvikk@gmail.com').toLowerCase().trim();
+const AUTHORIZED_ADMIN_UID = (process.env.AUTHORIZED_ADMIN_UID || process.env.ADMIN_FIREBASE_UID || '').trim();
+const AUTHORIZED_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'kalikalivino17@gmail.com').toLowerCase().trim();
 const CONFIGURED_ADMIN_PASS = process.env.ADMIN_PASSWORD || 'admin123';
+
+/**
+ * Validates whether an account is the single authorized administrator.
+ * Rules:
+ * 1. If AUTHORIZED_ADMIN_UID is configured, the user's UID MUST match it.
+ * 2. If AUTHORIZED_ADMIN_UID is not yet configured, matches against the single authorized admin email.
+ * 3. Never trust client claims or unverified payloads.
+ */
+export function isAuthorizedAdmin(userOrParams?: {
+  id?: string;
+  uid?: string;
+  email?: string;
+  role?: string;
+} | null): boolean {
+  if (!userOrParams) return false;
+  const cleanEmail = (userOrParams.email || '').toLowerCase().trim();
+  const effectiveUid = (userOrParams.uid || userOrParams.id || '').trim();
+
+  // If AUTHORIZED_ADMIN_UID is configured, UID check is mandatory
+  if (AUTHORIZED_ADMIN_UID) {
+    return effectiveUid === AUTHORIZED_ADMIN_UID && (!cleanEmail || cleanEmail === AUTHORIZED_ADMIN_EMAIL);
+  }
+
+  // Fallback to configured single administrator email (strictly single account)
+  if (AUTHORIZED_ADMIN_EMAIL && cleanEmail) {
+    return cleanEmail === AUTHORIZED_ADMIN_EMAIL;
+  }
+
+  return false;
+}
+
+export function isAdminEmail(email?: string): boolean {
+  return isAuthorizedAdmin({ email });
+}
 
 const DISPOSABLE_EMAIL_DOMAINS = [
   'mailinator.com',
@@ -224,16 +271,6 @@ function isDisposableEmail(email: string): boolean {
   if (!email || !email.includes('@')) return false;
   const domain = email.split('@')[1].toLowerCase().trim();
   return DISPOSABLE_EMAIL_DOMAINS.includes(domain);
-}
-
-export function isAdminEmail(email?: string): boolean {
-  if (!email) return false;
-  const clean = email.toLowerCase().trim();
-  return (
-    clean === CONFIGURED_ADMIN_EMAIL ||
-    clean === 'kalivinoselvikk@gmail.com' ||
-    clean === 'kalikalivino17@gmail.com'
-  );
 }
 
 // Unified Firebase Login & Session Sync with Server-Side Verification
@@ -262,19 +299,19 @@ app.post('/api/auth/firebase-login', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'A valid email address is required for authentication' });
   }
 
-  const isAdmin = isAdminEmail(verifiedEmail);
+  const isAuthAdmin = isAuthorizedAdmin({ uid: verifiedUid, email: verifiedEmail });
   let user = db.getUserByEmail(verifiedEmail);
 
   if (!user) {
     const salt = generateSalt();
     user = {
-      id: verifiedUid || (isAdmin ? 'user-admin-fb' : 'user-fb-' + Date.now()),
-      name: verifiedName || (isAdmin ? 'Vinoth (Administrator)' : 'Verified Reader'),
+      id: verifiedUid || (isAuthAdmin ? 'user-admin-fb' : 'user-fb-' + Date.now()),
+      name: verifiedName || (isAuthAdmin ? 'Vinoth (Administrator)' : 'Verified Reader'),
       email: verifiedEmail,
       passwordHash: hashPassword(verifiedUid || 'firebase-oauth-token', salt),
       salt,
-      role: isAdmin ? 'admin' : 'customer',
-      library: isAdmin
+      role: isAuthAdmin ? 'admin' : 'customer',
+      library: isAuthAdmin
         ? ['book-ai-mind', 'book-wealth-playbook', 'book-deep-focus', 'book-digital-product-blueprint', 'book-systematic-thinking']
         : ['book-digital-product-blueprint'],
       wishlist: [],
@@ -284,9 +321,13 @@ app.post('/api/auth/firebase-login', async (req: Request, res: Response) => {
     db.addUser(user);
     db.logActivity('USER_REGISTERED', `New account via Firebase Auth: ${verifiedEmail} (${user.role})`, verifiedEmail, req.ip);
   } else {
-    // Reconcile role if email matches authorized admin
-    if (isAdmin && user.role !== 'admin') {
+    // Reconcile role: strictly only the single authorized admin can have admin role
+    if (isAuthAdmin && user.role !== 'admin') {
       user.role = 'admin';
+      db.save();
+    } else if (!isAuthAdmin && user.role === 'admin') {
+      console.warn(`[SECURITY] Downgrading unauthorized account ${user.email} from admin to customer`);
+      user.role = 'customer';
       db.save();
     }
     if (isEmailVerified && !user.emailVerified) {
@@ -296,7 +337,7 @@ app.post('/api/auth/firebase-login', async (req: Request, res: Response) => {
   }
 
   db.logActivity(
-    isAdmin ? 'ADMIN_SIGNIN' : 'CUSTOMER_SIGNIN',
+    isAuthAdmin ? 'ADMIN_SIGNIN' : 'CUSTOMER_SIGNIN',
     `Successful Firebase authentication for ${verifiedEmail}`,
     verifiedEmail,
     req.ip
@@ -324,18 +365,23 @@ app.post('/api/admin/auth/login', (req: Request, res: Response) => {
   }
 
   const cleanEmail = email.toLowerCase().trim();
-  const user = db.getUserByEmail(cleanEmail);
-  const isAdminCandidate = isAdminEmail(cleanEmail);
+  const isAuthAdmin = isAuthorizedAdmin({ email: cleanEmail });
 
-  let isAdminValid = false;
+  if (!isAuthAdmin) {
+    db.logActivity('UNAUTHORIZED_ADMIN_ATTEMPT', `Unauthorized admin login attempt for ${cleanEmail}`, cleanEmail, req.ip);
+    return res.status(403).json({ error: 'Access Denied: 403 Forbidden. This account is not an authorized administrator.' });
+  }
+
+  const user = db.getUserByEmail(cleanEmail);
+  let adminValid = false;
   let adminUser: User | undefined = user;
 
-  if (isAdminCandidate && (password === CONFIGURED_ADMIN_PASS || (user && user.passwordHash === hashPassword(password, user.salt)))) {
-    isAdminValid = true;
+  if (password === CONFIGURED_ADMIN_PASS || (user && user.passwordHash === hashPassword(password, user.salt))) {
+    adminValid = true;
     if (!adminUser) {
       const salt = generateSalt();
       adminUser = {
-        id: 'user-admin-env',
+        id: 'user-admin-main',
         name: 'Vinoth (Administrator)',
         email: cleanEmail,
         passwordHash: hashPassword(CONFIGURED_ADMIN_PASS, salt),
@@ -350,15 +396,9 @@ app.post('/api/admin/auth/login', (req: Request, res: Response) => {
       adminUser.role = 'admin';
       db.save();
     }
-  } else if (user && user.role === 'admin') {
-    const hash = hashPassword(password, user.salt);
-    if (hash === user.passwordHash) {
-      isAdminValid = true;
-      adminUser = user;
-    }
   }
 
-  if (!isAdminValid || !adminUser) {
+  if (!adminValid || !adminUser) {
     db.logActivity('FAILED_ADMIN_LOGIN', `Failed admin login attempt for ${cleanEmail}`, cleanEmail, req.ip);
     return res.status(401).json({ error: 'Invalid administrator credentials' });
   }
@@ -421,24 +461,24 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
 
   const salt = generateSalt();
   const passwordHash = hashPassword(password, salt);
-  const isAdmin = isAdminEmail(cleanEmail);
 
+  // CRITICAL REQUIREMENT 1: Normal registration must always create a CUSTOMER account.
+  // Never automatically assign admin privileges during registration.
+  // Never trust a role sent from the frontend.
   const newUser: User = {
-    id: isAdmin ? 'user-admin-' + Date.now() : (uid || 'user-' + Date.now()),
+    id: uid || 'user-' + Date.now(),
     name: name.trim(),
     email: cleanEmail,
     passwordHash,
     salt,
-    role: isAdmin ? 'admin' : 'customer',
-    library: isAdmin
-      ? ['book-ai-mind', 'book-wealth-playbook', 'book-deep-focus', 'book-digital-product-blueprint', 'book-systematic-thinking']
-      : ['book-digital-product-blueprint'],
+    role: 'customer', // Strictly customer!
+    library: ['book-digital-product-blueprint'],
     wishlist: [],
     createdAt: new Date().toISOString()
   };
 
   db.addUser(newUser);
-  db.logActivity('USER_REGISTERED', `Account registered: ${cleanEmail} (${newUser.role})`, cleanEmail, req.ip);
+  db.logActivity('USER_REGISTERED', `Customer account registered: ${cleanEmail}`, cleanEmail, req.ip);
 
   const token = generateToken(newUser);
 
@@ -453,7 +493,7 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
       wishlist: newUser.wishlist,
       emailVerified: Boolean(emailVerified)
     },
-    message: isAdmin ? 'Administrator account registered successfully' : 'Reader account registered successfully'
+    message: 'Reader customer account registered successfully'
   });
 });
 
@@ -1038,6 +1078,101 @@ app.get('/api/payment/config', (_req: Request, res: Response) => {
   res.json(db.getPublicPaymentConfig());
 });
 
+app.get('/api/payment/upi-config', (_req: Request, res: Response) => {
+  res.json(db.getUpiSettings());
+});
+
+app.get('/api/admin/payment-settings/upi', requireAdmin, (_req: Request, res: Response) => {
+  res.json(db.getUpiSettings());
+});
+
+app.post('/api/admin/payment-settings/upi', requireAdmin, (req: Request, res: Response) => {
+  const { enabled, upiId, payeeName, qrImageUrl, instructions } = req.body;
+  const updated = db.updateUpiSettings({
+    ...(enabled !== undefined ? { enabled: Boolean(enabled) } : {}),
+    ...(upiId !== undefined ? { upiId: String(upiId).trim() } : {}),
+    ...(payeeName !== undefined ? { payeeName: String(payeeName).trim() } : {}),
+    ...(qrImageUrl !== undefined ? { qrImageUrl: String(qrImageUrl).trim() } : {}),
+    ...(instructions !== undefined ? { instructions: String(instructions).trim() } : {})
+  });
+  db.logActivity('UPI_SETTINGS_UPDATED', `Direct UPI payment settings updated (${updated.upiId})`, (req as any).user.email, req.ip);
+  res.json({ success: true, message: 'UPI payment settings updated successfully', config: updated });
+});
+
+// Original QR Image Upload from Device (PNG, JPG, JPEG, WEBP <= 5MB)
+app.post('/api/admin/payment-settings/upload-qr', requireAdmin, express.json({ limit: '10mb' }), async (req: Request, res: Response) => {
+  try {
+    const dataUrl = req.body.dataUrl || req.body.imageData;
+    const fileName = req.body.fileName || 'merchant_qr';
+    if (!dataUrl || typeof dataUrl !== 'string') {
+      return res.status(400).json({ error: 'No image data provided. Please select an image file.' });
+    }
+
+    const match = dataUrl.match(/^data:(image\/(png|jpeg|jpg|webp));base64,(.+)$/);
+    if (!match) {
+      return res.status(400).json({ error: 'Invalid file format. Supported formats: PNG, JPG, JPEG, WEBP.' });
+    }
+
+    const mimeType = match[1];
+    const extension = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+    const base64Data = match[3];
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    // 5MB size limit
+    if (buffer.length > 5 * 1024 * 1024) {
+      return res.status(400).json({ error: 'File size exceeds 5MB limit. Please upload a smaller image.' });
+    }
+
+    const uploadsDir = path.resolve(process.cwd(), 'public', 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const targetFileName = `merchant_upi_qr.${extension}`;
+    const targetFilePath = path.join(uploadsDir, targetFileName);
+    await fs.promises.writeFile(targetFilePath, buffer);
+
+    const publicUrl = `/uploads/${targetFileName}?t=${Date.now()}`;
+    const updated = db.updateUpiSettings({ qrImageUrl: publicUrl });
+    db.logActivity('UPI_QR_UPLOADED', `Administrator uploaded new merchant UPI QR image (${fileName || targetFileName})`, (req as any).user.email, req.ip);
+
+    res.json({
+      success: true,
+      message: 'Original UPI QR image successfully uploaded and persistently saved!',
+      qrImageUrl: publicUrl,
+      config: updated
+    });
+  } catch (err: any) {
+    console.error('Error uploading UPI QR:', err);
+    res.status(500).json({ error: err.message || 'Failed to process and save QR image on server.' });
+  }
+});
+
+// Remove Existing UPI QR Image
+app.post('/api/admin/payment-settings/remove-qr', requireAdmin, (_req: Request, res: Response) => {
+  try {
+    const updated = db.updateUpiSettings({ qrImageUrl: '' });
+    db.logActivity('UPI_QR_REMOVED', `Administrator removed custom merchant UPI QR image`, (_req as any).user.email, _req.ip);
+    res.json({
+      success: true,
+      message: 'Custom UPI QR removed. System will use standard generated QR.',
+      config: updated
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to remove QR image.' });
+  }
+});
+
+// Admin Payment Verification list
+app.get('/api/admin/payment-verifications', requireAdmin, (_req: Request, res: Response) => {
+  const allOrders = db.getOrders();
+  const verifications = allOrders
+    .filter(o => o.paymentMethod === 'upi_qr' || o.paymentStatus === 'pending_verification' || o.paymentStatus === 'rejected')
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  res.json({ orders: verifications });
+});
+
 app.get('/api/admin/payment-settings', requireAdmin, (_req: Request, res: Response) => {
   const ps = db.getPaymentSettings();
   res.json({
@@ -1200,7 +1335,258 @@ app.post('/api/payment/webhook', (req: Request, res: Response) => {
 // -------------------------------------------------------------
 app.post('/api/payment/create-order', requireAuth, async (req: Request, res: Response) => {
   const user = (req as any).user as User;
-  const { bookIds, couponCode } = req.body;
+  const { bookIds, couponCode, retryOrderId } = req.body;
+
+  let orderId: string;
+  let items: any[] = [];
+  let subtotal = 0;
+  let discount = 0;
+  let existingOrder: Order | undefined;
+
+  const allBooks = db.getBooks();
+
+  if (retryOrderId) {
+    existingOrder = db.getOrders().find(o => o.id === retryOrderId && o.userId === user.id);
+    if (!existingOrder) {
+      return res.status(404).json({ error: `Order ${retryOrderId} not found for retry.` });
+    }
+    if (existingOrder.paymentStatus === 'paid' || existingOrder.paymentStatus === 'captured') {
+      return res.json({
+        orderId: existingOrder.id,
+        total: existingOrder.total,
+        isFree: existingOrder.total === 0,
+        status: 'paid',
+        message: 'This order is already verified and paid. Books are available in your library.'
+      });
+    }
+
+    orderId = existingOrder.id;
+
+    // Authoritative price re-verification from database
+    for (const it of existingOrder.items) {
+      let book = allBooks.find(b => b.id === it.bookId || (b as any).slug === it.bookId);
+      if (!book) {
+        return res.status(404).json({ error: `Book ${it.bookId} is no longer available in the catalog.` });
+      }
+      items.push({
+        bookId: book.id,
+        title: book.title,
+        price: book.sellingPrice,
+        coverImage: book.coverImage
+      });
+      subtotal += book.sellingPrice;
+    }
+    discount = existingOrder.discount || 0;
+  } else {
+    if (!Array.isArray(bookIds) || bookIds.length === 0) {
+      return res.status(400).json({ error: 'No books selected for checkout' });
+    }
+
+    for (const bId of bookIds) {
+      let book = allBooks.find(b => b.id === bId || (b as any).slug === bId);
+      if (!book && Array.isArray(req.body.clientBooks)) {
+        const clientBook = req.body.clientBooks.find((cb: any) => cb.id === bId);
+        if (clientBook) {
+          db.addBook(clientBook);
+          book = clientBook;
+        }
+      }
+      if (!book) return res.status(404).json({ error: `Book ${bId} not found` });
+      items.push({
+        bookId: book.id,
+        title: book.title,
+        price: book.sellingPrice,
+        coverImage: book.coverImage
+      });
+      subtotal += book.sellingPrice;
+    }
+
+    if (couponCode) {
+      const coupon = db.getCouponByCode(couponCode);
+      if (coupon && coupon.isActive && new Date(coupon.expiresAt).getTime() >= Date.now() && subtotal >= coupon.minPurchase) {
+        discount = coupon.discountType === 'percentage'
+          ? Math.round((subtotal * coupon.discountValue) / 100)
+          : coupon.discountValue;
+        discount = Math.min(discount, subtotal);
+        coupon.usageCount++;
+        db.save();
+      }
+    }
+
+    orderId = 'ORD-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000);
+  }
+
+  const total = Math.max(0, subtotal - discount);
+
+  const paymentConfig = db.getPaymentSettings();
+  const currentMode = paymentConfig.mode;
+  const activeKeyId = currentMode === 'live' ? paymentConfig.liveKeyId : paymentConfig.testKeyId;
+  const activeKeySecret = currentMode === 'live' ? paymentConfig.liveKeySecret : paymentConfig.testKeySecret;
+
+  let realRazorpayOrderId: string | null = null;
+  let isRealOrder = false;
+
+  // If Razorpay API credentials are provided, attempt to register real order on Razorpay servers
+  if (activeKeyId && activeKeySecret) {
+    try {
+      const basicAuth = Buffer.from(`${activeKeyId}:${activeKeySecret}`).toString('base64');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+      const rzpRes = await fetch('https://api.razorpay.com/v1/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${basicAuth}`
+        },
+        body: JSON.stringify({
+          amount: total * 100, // paise
+          currency: 'INR',
+          receipt: orderId,
+          notes: {
+            orderId: orderId,
+            customerEmail: user.email
+          }
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (rzpRes.ok) {
+        const rzpData = (await rzpRes.json()) as any;
+        if (rzpData?.id) {
+          realRazorpayOrderId = rzpData.id;
+          isRealOrder = true;
+        }
+      } else {
+        const errJson = await rzpRes.json().catch(() => ({}));
+        console.warn('[Razorpay API] Could not create registered order, falling back to direct mode:', errJson);
+      }
+    } catch (e: any) {
+      console.warn('[Razorpay API] Orders fetch timeout or network issue:', e.message);
+    }
+  }
+
+  if (existingOrder) {
+    // Update existing order in-place without duplicate record creation
+    existingOrder.items = items;
+    existingOrder.subtotal = subtotal;
+    existingOrder.discount = discount;
+    existingOrder.total = total;
+    existingOrder.paymentStatus = total === 0 ? 'paid' : 'pending';
+    existingOrder.razorpayOrderId = realRazorpayOrderId || undefined;
+    existingOrder.updatedAt = new Date().toISOString();
+    db.save();
+    db.syncDoc('orders', existingOrder.id, existingOrder);
+    db.logActivity('ORDER_PAYMENT_RETRIED', `Order ${existingOrder.id} payment retried (₹${total})`, user.email, req.ip);
+  } else {
+    const order: Order = {
+      id: orderId,
+      userId: user.id,
+      customerName: user.name,
+      customerEmail: user.email,
+      items,
+      subtotal,
+      discount,
+      couponCode: couponCode || undefined,
+      total,
+      paymentStatus: total === 0 ? 'paid' : 'pending',
+      razorpayOrderId: realRazorpayOrderId || undefined,
+      transactionReference: 'TXN-' + Date.now().toString().slice(-8),
+      paymentMode: currentMode,
+      createdAt: new Date().toISOString()
+    };
+    db.addOrder(order);
+  }
+
+  // If order total is 0 (all free or 100% discount), instantly unlock
+  if (total === 0) {
+    for (const item of items) {
+      db.unlockBookForUser(user.id, item.bookId);
+    }
+    return res.json({
+      orderId,
+      total: 0,
+      isFree: true,
+      status: 'paid',
+      message: 'Order completed. Books unlocked in your library!'
+    });
+  }
+
+  const isRealKey = Boolean(
+    activeKeyId &&
+    !activeKeyId.includes('demo') &&
+    activeKeyId !== 'rzp_test_vinoth_books_demo' &&
+    activeKeyId.startsWith('rzp_')
+  );
+
+  const isConfigured = currentMode === 'live'
+    ? Boolean(paymentConfig.liveKeyId && paymentConfig.liveKeySecret && isRealKey)
+    : Boolean(paymentConfig.testKeyId && paymentConfig.testKeySecret && isRealKey);
+
+  res.json({
+    orderId,
+    razorpayOrderId: realRazorpayOrderId,
+    isRealOrder,
+    isRealKey,
+    amount: total * 100, // paise
+    currency: 'INR',
+    keyId: isRealKey ? activeKeyId : null,
+    mode: currentMode,
+    isConfigured,
+    customer: {
+      name: user.name,
+      email: user.email
+    }
+  });
+});
+
+// Direct UPI Payment Submission (with UTR / reference verification queue)
+app.post('/api/payment/submit-upi-order', requireAuth, (req: Request, res: Response) => {
+  const user = (req as any).user as User;
+  const { bookIds, couponCode, upiTransactionRef, upiReceiptUrl, retryOrderId } = req.body;
+
+  const utr = String(upiTransactionRef || '').trim();
+  if (utr.length < 6 || !/^[a-zA-Z0-9_-]{6,25}$/.test(utr)) {
+    return res.status(400).json({ error: 'Please enter a valid 6 to 25 character alphanumeric UPI Reference Number / UTR.' });
+  }
+
+  // Duplicate Reference Detection: Check across all completed or pending orders
+  const duplicateOrder = db.getOrders().find(
+    o => o.id !== (retryOrderId || '') &&
+    o.upiTransactionRef &&
+    o.upiTransactionRef.toLowerCase() === utr.toLowerCase() &&
+    (o.paymentStatus === 'paid' || o.paymentStatus === 'captured' || o.paymentStatus === 'pending_verification')
+  );
+  if (duplicateOrder) {
+    return res.status(400).json({
+      error: 'This UPI Transaction Reference (UTR) has already been submitted for another order. Each transaction requires a unique UTR.'
+    });
+  }
+
+  // If retrying an existing order via UPI
+  if (retryOrderId) {
+    const existingOrder = db.getOrders().find(o => o.id === retryOrderId && o.userId === user.id);
+    if (!existingOrder) {
+      return res.status(404).json({ error: `Order ${retryOrderId} not found.` });
+    }
+    existingOrder.paymentStatus = 'pending_verification';
+    existingOrder.paymentMethod = 'upi_qr';
+    existingOrder.upiTransactionRef = utr;
+    existingOrder.transactionReference = utr;
+    existingOrder.updatedAt = new Date().toISOString();
+    db.save();
+    db.syncDoc('orders', existingOrder.id, existingOrder);
+    db.logActivity('UPI_PAYMENT_SUBMITTED', `Direct UPI retried for Order ${existingOrder.id} (₹${existingOrder.total}) - UTR: ${utr}`, user.email, req.ip);
+
+    return res.json({
+      success: true,
+      orderId: existingOrder.id,
+      total: existingOrder.total,
+      status: 'pending_verification',
+      message: 'UPI payment reference updated successfully! Your order is queued for verification.'
+    });
+  }
 
   if (!Array.isArray(bookIds) || bookIds.length === 0) {
     return res.status(400).json({ error: 'No books selected for checkout' });
@@ -1244,10 +1630,6 @@ app.post('/api/payment/create-order', requireAuth, async (req: Request, res: Res
 
   const total = Math.max(0, subtotal - discount);
   const orderId = 'ORD-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000);
-  const razorpayOrderId = 'order_rzp_' + Date.now() + Math.random().toString(36).substring(2, 6);
-
-  const paymentConfig = db.getPaymentSettings();
-  const currentMode = paymentConfig.mode;
 
   const order: Order = {
     id: orderId,
@@ -1259,47 +1641,131 @@ app.post('/api/payment/create-order', requireAuth, async (req: Request, res: Res
     discount,
     couponCode: couponCode || undefined,
     total,
-    paymentStatus: total === 0 ? 'paid' : 'pending',
-    razorpayOrderId,
-    transactionReference: 'TXN-' + Date.now().toString().slice(-8),
-    paymentMode: currentMode,
+    paymentStatus: 'pending_verification',
+    paymentMethod: 'upi_qr',
+    upiTransactionRef: utr,
+    upiReceiptUrl: upiReceiptUrl || undefined,
+    transactionReference: utr,
+    paymentMode: db.getPaymentSettings().mode,
     createdAt: new Date().toISOString()
   };
 
   db.addOrder(order);
-
-  // If order total is 0 (all free or 100% discount), instantly unlock
-  if (total === 0) {
-    for (const item of items) {
-      db.unlockBookForUser(user.id, item.bookId);
-    }
-    return res.json({
-      orderId: order.id,
-      total: 0,
-      isFree: true,
-      status: 'paid',
-      message: 'Order completed. Books unlocked in your library!'
-    });
-  }
-
-  // Active key ID matching mode
-  const activeKeyId = currentMode === 'live' ? paymentConfig.liveKeyId : paymentConfig.testKeyId;
-  const isConfigured = currentMode === 'live'
-    ? Boolean(paymentConfig.liveKeyId && paymentConfig.liveKeySecret)
-    : Boolean(paymentConfig.testKeyId && paymentConfig.testKeySecret);
+  db.logActivity('UPI_PAYMENT_SUBMITTED', `Direct UPI Order submitted: ${order.id} (₹${order.total}) - UTR: ${utr}`, user.email, req.ip);
 
   res.json({
+    success: true,
     orderId: order.id,
-    razorpayOrderId,
-    amount: total * 100, // paise
-    currency: 'INR',
-    keyId: activeKeyId,
-    mode: currentMode,
-    isConfigured,
-    customer: {
-      name: user.name,
-      email: user.email
+    total: order.total,
+    status: 'pending_verification',
+    message: 'UPI payment submitted successfully! Your order is queued for verification. Once approved, books will be unlocked in your library.'
+  });
+});
+
+// Admin UPI Verification
+app.post('/api/admin/orders/:id/verify-upi', requireAdmin, (req: Request, res: Response) => {
+  const orderId = req.params.id;
+  const { verificationNote } = req.body;
+  const order = db.getOrders().find(o => o.id === orderId);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+
+  if (order.paymentStatus === 'paid' || order.paymentStatus === 'captured') {
+    return res.status(400).json({ error: 'This order is already verified and marked as Paid.' });
+  }
+
+  // Duplicate approval guard: ensure UTR was not used on another approved order
+  if (order.upiTransactionRef) {
+    const duplicatePaid = db.getOrders().find(
+      o => o.id !== order.id &&
+      o.upiTransactionRef &&
+      o.upiTransactionRef.toLowerCase() === order.upiTransactionRef?.toLowerCase() &&
+      (o.paymentStatus === 'paid' || o.paymentStatus === 'captured')
+    );
+    if (duplicatePaid) {
+      return res.status(400).json({
+        error: `Cannot approve: UPI reference ${order.upiTransactionRef} has already been approved on Order ${duplicatePaid.id}. Potential duplicate payment.`
+      });
     }
+  }
+
+  db.updateOrderStatus(order.id, 'paid', 'upi_pay_' + Date.now().toString().slice(-8), {
+    paymentMethod: order.paymentMethod || 'upi_qr',
+    settlementStatus: 'settled',
+    verificationNote: verificationNote || 'Approved by administrator against bank records'
+  });
+
+  db.logActivity(
+    'UPI_PAYMENT_VERIFIED',
+    `Admin verified Direct UPI for Order ${order.id} (₹${order.total}) - Books unlocked for ${order.customerEmail}`,
+    (req as any).user.email,
+    req.ip
+  );
+
+  res.json({
+    success: true,
+    message: `Order ${order.id} marked as Paid. Customer books have been unlocked in their library!`,
+    order
+  });
+});
+
+app.post('/api/admin/orders/:id/reject-upi', requireAdmin, (req: Request, res: Response) => {
+  const orderId = req.params.id;
+  const { reason, verificationNote } = req.body;
+  const order = db.getOrders().find(o => o.id === orderId);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+
+  db.updateOrderStatus(order.id, 'rejected', undefined, {
+    rejectionReason: reason || 'Invalid or unconfirmed UTR reference in merchant bank statement',
+    verificationNote: verificationNote || reason
+  });
+
+  db.logActivity(
+    'UPI_PAYMENT_REJECTED',
+    `Direct UPI payment rejected for Order ${order.id}. Reason: ${reason || 'Unverified reference'}`,
+    (req as any).user.email,
+    req.ip
+  );
+
+  res.json({
+    success: true,
+    message: `Order ${order.id} marked as REJECTED. Books remain locked.`,
+    order
+  });
+});
+
+// User Monthly Reading Goal Endpoints
+app.get('/api/user/reading-goal', requireAuth, (req: Request, res: Response) => {
+  const user = (req as any).user as User;
+  const currentUser = db.getUserById(user.id);
+  res.json({
+    goal: currentUser?.reading_goal || {
+      target: 3,
+      month: new Date().toISOString().slice(0, 7),
+      completedCount: 0,
+      updatedAt: new Date().toISOString()
+    }
+  });
+});
+
+app.post('/api/user/reading-goal', requireAuth, (req: Request, res: Response) => {
+  const user = (req as any).user as User;
+  const { target, month } = req.body;
+
+  const validTarget = Math.max(1, Math.min(50, Number(target) || 3));
+  const currentMonth = month || new Date().toISOString().slice(0, 7);
+
+  const updatedUser = db.updateUser(user.id, {
+    reading_goal: {
+      target: validTarget,
+      month: currentMonth,
+      updatedAt: new Date().toISOString()
+    }
+  });
+
+  res.json({
+    success: true,
+    goal: updatedUser?.reading_goal,
+    message: `Monthly reading goal updated to ${validTarget} books!`
   });
 });
 
@@ -1456,14 +1922,25 @@ app.get('/api/library/read/:bookId', requireAuth, (req: Request, res: Response) 
   });
 });
 
-app.get('/api/library/download/:bookId', requireAuth, (req: Request, res: Response) => {
+function handleSecureBookDownload(req: Request, res: Response) {
   const user = (req as any).user as User;
-  const book = db.getBookById(req.params.bookId);
+  const bookId = req.params.bookId || req.params.id;
+  const book = db.getBookById(bookId);
   if (!book) return res.status(404).json({ error: 'Book not found' });
 
-  const hasAccess = user.role === 'admin' || user.library.includes(book.id) || book.isFree;
+  const isFree = book.isFree || book.sellingPrice === 0;
+  const isAdm = user.role === 'admin' && isAuthorizedAdmin(user);
+  const inLibrary = Array.isArray(user.library) && user.library.includes(book.id);
+  const hasPaidOrder = db.getOrders().some(
+    o => o.userId === user.id &&
+    (o.paymentStatus === 'paid' || o.paymentStatus === 'captured') &&
+    o.items.some(i => i.bookId === book.id)
+  );
+
+  const hasAccess = isAdm || isFree || (inLibrary && hasPaidOrder);
   if (!hasAccess) {
-    return res.status(403).json({ error: 'Unauthorized: Digital file download is restricted to verified purchasers.' });
+    db.logActivity('UNAUTHORIZED_DOWNLOAD_BLOCKED', `Blocked unauthorized download for ${book.title} by ${user.email}`, user.email, req.ip);
+    return res.status(403).json({ error: 'Unauthorized: Digital file download is restricted to verified purchasers of this eBook.' });
   }
 
   const sanitizedTitle = book.title.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -1512,7 +1989,10 @@ Contact: contact@vinothbooks.com | Web: https://vinothbooks.com
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.send(ebookDocument);
-});
+}
+
+app.get('/api/library/download/:bookId', requireAuth, handleSecureBookDownload);
+app.get('/api/books/:id/download', requireAuth, handleSecureBookDownload);
 
 // -------------------------------------------------------------
 // CUSTOMER FEEDBACK INBOX
@@ -1912,7 +2392,21 @@ app.get('/api/admin/activity-logs', requireAdmin, (_req: Request, res: Response)
 // -------------------------------------------------------------
 // STATIC & VITE INTEGRATION
 // -------------------------------------------------------------
+function sanitizeAdminAccounts() {
+  const users = db.getUsers();
+  let modified = false;
+  for (const u of users) {
+    if (u.role === 'admin' && !isAuthorizedAdmin(u)) {
+      console.warn(`[SECURITY] Downgrading unauthorized account ${u.email} (${u.id}) from admin to customer`);
+      u.role = 'customer';
+      modified = true;
+    }
+  }
+  if (modified) db.save();
+}
+
 async function startServer() {
+  sanitizeAdminAccounts();
   if (process.env.NODE_ENV === 'production') {
     app.use(express.static(path.resolve(process.cwd(), 'dist')));
     app.get('*', (_req, res) => {

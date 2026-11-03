@@ -67,7 +67,22 @@ export interface User {
     chapterTitle?: string;
     updatedAt: string;
   }>;
+  reading_goal?: {
+    target: number;
+    month: string;
+    completedCount?: number;
+    updatedAt: string;
+  };
   createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface UpiPaymentConfig {
+  enabled: boolean;
+  upiId: string;
+  payeeName: string;
+  qrImageUrl?: string;
+  instructions?: string;
   updatedAt?: string;
 }
 
@@ -92,8 +107,12 @@ export interface Order {
   discount: number;
   couponCode?: string;
   total: number;
-  paymentStatus: 'paid' | 'pending' | 'failed' | 'cancelled' | 'captured' | 'settlement_initiated' | 'settlement_completed';
+  paymentStatus: 'paid' | 'pending' | 'failed' | 'cancelled' | 'captured' | 'settlement_initiated' | 'settlement_completed' | 'pending_verification' | 'rejected';
   paymentMethod?: string;
+  upiTransactionRef?: string;
+  upiReceiptUrl?: string;
+  verificationNote?: string;
+  rejectionReason?: string;
   settlementStatus?: 'pending' | 'processing' | 'settled';
   settlementId?: string;
   razorpayOrderId?: string;

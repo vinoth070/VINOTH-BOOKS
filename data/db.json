@@ -1,6 +1,24 @@
 {
   "books": [
     {
+      "id": "test-book-800",
+      "title": "Advanced Architecture Systems",
+      "sellingPrice": 800,
+      "salesCount": 1
+    },
+    {
+      "id": "test-book-199",
+      "title": "Productivity Masterclass",
+      "sellingPrice": 199,
+      "salesCount": 1
+    },
+    {
+      "id": "test-book-5",
+      "title": "Micro Guide to Fast Reading",
+      "sellingPrice": 5,
+      "salesCount": 1
+    },
+    {
       "id": "book-ai-mind",
       "title": "The AI Mind: Architecture of Tomorrow",
       "subtitle": "Designing Human-Centered Intelligent Systems and Autonomous Workflows",
@@ -50,7 +68,7 @@
           "content": "The working memory of any cognitive engine is strictly bounded by its context window. Yet human intuition often mistakes raw capacity for comprehension. Just because a model can ingest a million tokens does not mean every token receives equal attentional fidelity.\n\nEffective prompt architecture is fundamentally the art of signal curation. By isolating noise, anchoring relevant facts, and maintaining consistent schemas, we construct environments where inference remains sharp, disciplined, and reliable."
         }
       ],
-      "salesCount": 482,
+      "salesCount": 488,
       "rating": 4.9,
       "reviewCount": 38,
       "isDemoData": true,
@@ -375,7 +393,9 @@
         "book-systematic-thinking"
       ],
       "wishlist": [],
-      "createdAt": "2026-01-01T00:00:00Z"
+      "createdAt": "2026-01-01T00:00:00Z",
+      "language": "en",
+      "updatedAt": "2026-11-03T16:53:47.504Z"
     },
     {
       "id": "user-customer-demo",
@@ -392,9 +412,294 @@
         "book-wealth-playbook"
       ],
       "createdAt": "2026-04-10T14:20:00Z"
+    },
+    {
+      "id": "user-1793727802755",
+      "name": "Test Customer",
+      "email": "testcust_1793727802717@example.com",
+      "passwordHash": "34452e494a2fe9379d8b376889b8e26eaac1655011a5e496888cbdb9ce430dce7d53549d5ed562b0407a40f50233ea47119aa280cf5a309aa890ed52e326fc8a",
+      "salt": "44f272151f5759b0e7c1f574557fc271",
+      "role": "customer",
+      "library": [
+        "book-digital-product-blueprint"
+      ],
+      "wishlist": [],
+      "createdAt": "2026-11-03T17:43:22.755Z"
+    },
+    {
+      "id": "user-1793727849194",
+      "name": "Test Customer",
+      "email": "testcust_1793727849172@example.com",
+      "passwordHash": "7dcace51da945ef6cef3d9b07cc8b11af10f1d428abfd22e0d53689eeddcd1c06b6704b0a01a180a5e42aff021e971484a796fe1d2a71360dae932f2ff402c96",
+      "salt": "cecb063cd108a7530b5359e1d114e99e",
+      "role": "customer",
+      "library": [
+        "book-digital-product-blueprint"
+      ],
+      "wishlist": [],
+      "createdAt": "2026-11-03T17:44:09.194Z"
+    },
+    {
+      "id": "user-1793727886465",
+      "name": "Test Customer",
+      "email": "testcust_1793727886424@example.com",
+      "passwordHash": "04a65ab51d0d1a85cde1eb0390255fe9f83fa6c2f727e5f0ceef1ae2d3080c21fa3286dbd988346a2ca554385498195229094d80c6b59317b0f469aa1085aabe",
+      "salt": "7f3dcf6fd3714a91f6fdb140e0715055",
+      "role": "customer",
+      "library": [
+        "book-digital-product-blueprint",
+        "book-ai-mind"
+      ],
+      "wishlist": [],
+      "createdAt": "2026-11-03T17:44:46.465Z"
+    },
+    {
+      "id": "user-1793727926107",
+      "name": "Test Customer",
+      "email": "testcust_1793727926067@example.com",
+      "passwordHash": "80ccd200ae7efeab87a45dccd5227ed1998807a18be88d6d4b05132a245e95fad86ecbea923e3b881b4a868ed793b8b778837f69ae26ccc12d20f757951c58a6",
+      "salt": "c9b89e6302177b6b2dcfa2af905f377e",
+      "role": "customer",
+      "library": [
+        "book-digital-product-blueprint",
+        "book-ai-mind"
+      ],
+      "wishlist": [],
+      "createdAt": "2026-11-03T17:45:26.107Z"
+    },
+    {
+      "id": "user-1793727983993",
+      "name": "Test Customer",
+      "email": "testcust_1793727983951@example.com",
+      "passwordHash": "10dcce000199ed490fe7f15c5246efed66b7f33582d510a20cbaaf90320d2f4308c5cd37d86a0eeca0a99bec338bdc8d39149ebe3c842adadecdcdf4e1c783a2",
+      "salt": "bd852c71f63e94da10030a5f8cf8d69a",
+      "role": "customer",
+      "library": [
+        "book-digital-product-blueprint",
+        "book-ai-mind"
+      ],
+      "wishlist": [],
+      "createdAt": "2026-11-03T17:46:23.994Z"
     }
   ],
   "orders": [
+    {
+      "id": "ORD-2026-5504",
+      "userId": "user-1793727983993",
+      "customerName": "Test Customer",
+      "customerEmail": "testcust_1793727983951@example.com",
+      "items": [
+        {
+          "bookId": "book-ai-mind",
+          "title": "The AI Mind: Architecture of Tomorrow",
+          "price": 799,
+          "coverImage": "/src/assets/images/book_cover_ai_revolution_1793365303535.jpg"
+        }
+      ],
+      "subtotal": 799,
+      "discount": 0,
+      "total": 799,
+      "paymentStatus": "paid",
+      "paymentMethod": "upi_qr",
+      "upiTransactionRef": "UTR1793727984033",
+      "transactionReference": "UTR1793727984033",
+      "paymentMode": "test",
+      "createdAt": "2026-11-03T17:46:24.036Z",
+      "updatedAt": "2026-11-03T17:46:24.044Z",
+      "razorpayPaymentId": "upi_pay_27984044",
+      "verificationNote": "Approved by administrator against bank records",
+      "settlementStatus": "settled"
+    },
+    {
+      "id": "ORD-2026-4592",
+      "userId": "user-1793727926107",
+      "customerName": "Test Customer",
+      "customerEmail": "testcust_1793727926067@example.com",
+      "items": [
+        {
+          "bookId": "book-ai-mind",
+          "title": "The AI Mind: Architecture of Tomorrow",
+          "price": 799,
+          "coverImage": "/src/assets/images/book_cover_ai_revolution_1793365303535.jpg"
+        }
+      ],
+      "subtotal": 799,
+      "discount": 0,
+      "total": 799,
+      "paymentStatus": "paid",
+      "paymentMethod": "upi_qr",
+      "upiTransactionRef": "UTR1793727926131",
+      "transactionReference": "UTR1793727926131",
+      "paymentMode": "test",
+      "createdAt": "2026-11-03T17:45:26.133Z",
+      "updatedAt": "2026-11-03T17:45:26.141Z",
+      "razorpayPaymentId": "upi_pay_27926141",
+      "verificationNote": "Approved by administrator against bank records",
+      "settlementStatus": "settled"
+    },
+    {
+      "id": "ORD-2026-8492",
+      "userId": "user-1793727886465",
+      "customerName": "Test Customer",
+      "customerEmail": "testcust_1793727886424@example.com",
+      "items": [
+        {
+          "bookId": "book-ai-mind",
+          "title": "The AI Mind: Architecture of Tomorrow",
+          "price": 799,
+          "coverImage": "/src/assets/images/book_cover_ai_revolution_1793365303535.jpg"
+        }
+      ],
+      "subtotal": 799,
+      "discount": 0,
+      "total": 799,
+      "paymentStatus": "paid",
+      "paymentMethod": "upi_qr",
+      "upiTransactionRef": "UTR1793727886492",
+      "transactionReference": "UTR1793727886492",
+      "paymentMode": "test",
+      "createdAt": "2026-11-03T17:44:46.494Z",
+      "updatedAt": "2026-11-03T17:44:46.502Z",
+      "razorpayPaymentId": "upi_pay_27886502",
+      "verificationNote": "Approved by administrator against bank records",
+      "settlementStatus": "settled"
+    },
+    {
+      "id": "ORD-2026-7508",
+      "userId": "user-1793727849194",
+      "customerName": "Test Customer",
+      "customerEmail": "testcust_1793727849172@example.com",
+      "items": [
+        {
+          "bookId": "book-ai-mind",
+          "title": "The AI Mind: Architecture of Tomorrow",
+          "price": 799,
+          "coverImage": "/src/assets/images/book_cover_ai_revolution_1793365303535.jpg"
+        }
+      ],
+      "subtotal": 799,
+      "discount": 0,
+      "total": 799,
+      "paymentStatus": "pending_verification",
+      "paymentMethod": "upi_qr",
+      "upiTransactionRef": "UTR1793727849214",
+      "transactionReference": "UTR1793727849214",
+      "paymentMode": "test",
+      "createdAt": "2026-11-03T17:44:09.220Z"
+    },
+    {
+      "id": "ORD-2026-9536",
+      "userId": "user-1793727849194",
+      "customerName": "Test Customer",
+      "customerEmail": "testcust_1793727849172@example.com",
+      "items": [
+        {
+          "bookId": "book-ai-mind",
+          "title": "The AI Mind: Architecture of Tomorrow",
+          "price": 799,
+          "coverImage": "/src/assets/images/book_cover_ai_revolution_1793365303535.jpg"
+        }
+      ],
+      "subtotal": 799,
+      "discount": 0,
+      "total": 799,
+      "paymentStatus": "pending_verification",
+      "paymentMethod": "upi_qr",
+      "upiTransactionRef": "UTR1793727849214",
+      "transactionReference": "UTR1793727849214",
+      "paymentMode": "test",
+      "createdAt": "2026-11-03T17:44:09.216Z"
+    },
+    {
+      "id": "ORD-2026-9419",
+      "userId": "user-customer-demo",
+      "customerName": "Priya Sharma",
+      "customerEmail": "reader@vinothbooks.com",
+      "items": [
+        {
+          "bookId": "test-book-800",
+          "title": "Advanced Architecture Systems",
+          "price": 800
+        }
+      ],
+      "subtotal": 800,
+      "discount": 0,
+      "total": 800,
+      "paymentStatus": "pending",
+      "razorpayOrderId": "order_TvmKKTsBPghqrW",
+      "transactionReference": "TXN-25488173",
+      "paymentMode": "test",
+      "createdAt": "2026-11-03T17:04:48.173Z"
+    },
+    {
+      "id": "ORD-2026-5204",
+      "userId": "user-customer-demo",
+      "customerName": "Priya Sharma",
+      "customerEmail": "reader@vinothbooks.com",
+      "items": [
+        {
+          "bookId": "test-book-199",
+          "title": "Productivity Masterclass",
+          "price": 199
+        }
+      ],
+      "subtotal": 199,
+      "discount": 0,
+      "total": 199,
+      "paymentStatus": "pending",
+      "razorpayOrderId": "order_TvmKKKeO0IQ1WE",
+      "transactionReference": "TXN-25488053",
+      "paymentMode": "test",
+      "createdAt": "2026-11-03T17:04:48.053Z"
+    },
+    {
+      "id": "ORD-2026-8347",
+      "userId": "user-customer-demo",
+      "customerName": "Priya Sharma",
+      "customerEmail": "reader@vinothbooks.com",
+      "items": [
+        {
+          "bookId": "test-book-5",
+          "title": "Micro Guide to Fast Reading",
+          "price": 5
+        }
+      ],
+      "subtotal": 5,
+      "discount": 0,
+      "total": 5,
+      "paymentStatus": "pending",
+      "razorpayOrderId": "order_TvmKKD4gPUL4AE",
+      "transactionReference": "TXN-25487936",
+      "paymentMode": "test",
+      "createdAt": "2026-11-03T17:04:47.936Z"
+    },
+    {
+      "id": "ORD-2026-2978",
+      "userId": "user-customer-demo",
+      "customerName": "Priya Sharma",
+      "customerEmail": "reader@vinothbooks.com",
+      "items": [
+        {
+          "bookId": "book-ai-mind",
+          "title": "The AI Mind: Architecture of Tomorrow",
+          "price": 799,
+          "coverImage": "/src/assets/images/book_cover_ai_revolution_1793365303535.jpg"
+        }
+      ],
+      "subtotal": 799,
+      "discount": 0,
+      "total": 799,
+      "paymentStatus": "paid",
+      "razorpayOrderId": "order_TvmK8skbYZoTCN",
+      "transactionReference": "123456789012",
+      "paymentMode": "test",
+      "createdAt": "2026-11-03T17:04:37.437Z",
+      "updatedAt": "2026-11-03T17:04:37.586Z",
+      "paymentMethod": "upi_qr",
+      "upiTransactionRef": "123456789012",
+      "razorpayPaymentId": "pay_test_verified_12345",
+      "settlementStatus": "pending"
+    },
     {
       "id": "ORD-2026-8841",
       "userId": "user-customer-demo",
@@ -582,6 +887,14 @@
     "isLiveConfirmed": false,
     "updatedAt": "2026-10-31T09:38:30.065Z"
   },
+  "upiSettings": {
+    "enabled": true,
+    "upiId": "vinothbooks@okhdfcbank",
+    "payeeName": "VINOTH BOOKS",
+    "qrImageUrl": "",
+    "instructions": "1. Scan the QR code or transfer to our official UPI ID using GPay, PhonePe, Paytm, or BHIM.\n2. Pay the exact order amount.\n3. Enter the 12-digit UPI Reference Number / UTR below.\n4. Our team will verify and unlock your eBook in your library within minutes.",
+    "updatedAt": "2026-11-03T17:46:24.061Z"
+  },
   "websiteSettings": {
     "storeName": "VINOTH BOOKS",
     "tagline": "Ideas Into Pages. Knowledge Without Limits.",
@@ -604,5 +917,303 @@
       "responseHours": "Monday – Saturday: 9:00 AM – 6:00 PM IST",
       "supportNote": "We typically respond to reader and customer inquiries within 12 to 24 hours."
     }
-  }
+  },
+  "activityLogs": [
+    {
+      "id": "log-1793727984061-oiv9",
+      "action": "UPI_QR_REMOVED",
+      "details": "Administrator removed custom merchant UPI QR image",
+      "adminEmail": "kalikalivino17@gmail.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:46:24.061Z"
+    },
+    {
+      "id": "log-1793727984056-nfi9",
+      "action": "UPI_QR_UPLOADED",
+      "details": "Administrator uploaded new merchant UPI QR image (merchant_qr)",
+      "adminEmail": "kalikalivino17@gmail.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:46:24.056Z"
+    },
+    {
+      "id": "log-1793727984045-37zv",
+      "action": "UPI_PAYMENT_VERIFIED",
+      "details": "Admin verified Direct UPI for Order ORD-2026-5504 (₹799) - Books unlocked for testcust_1793727983951@example.com",
+      "adminEmail": "kalikalivino17@gmail.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:46:24.045Z"
+    },
+    {
+      "id": "log-1793727984037-ejth",
+      "action": "UPI_PAYMENT_SUBMITTED",
+      "details": "Direct UPI Order submitted: ORD-2026-5504 (₹799) - UTR: UTR1793727984033",
+      "adminEmail": "testcust_1793727983951@example.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:46:24.037Z"
+    },
+    {
+      "id": "log-1793727984027-yxy4",
+      "action": "ADMIN_SIGNIN",
+      "details": "Administrator signed in: kalikalivino17@gmail.com",
+      "adminEmail": "kalikalivino17@gmail.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:46:24.027Z"
+    },
+    {
+      "id": "log-1793727984017-uwzv",
+      "action": "UNAUTHORIZED_ADMIN_BLOCKED",
+      "details": "Access Denied: Blocked unauthorized account testcust_1793727983951@example.com from accessing admin endpoint /api/admin/payment-settings",
+      "adminEmail": "testcust_1793727983951@example.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:46:24.017Z"
+    },
+    {
+      "id": "log-1793727983995-0ei2",
+      "action": "USER_REGISTERED",
+      "details": "Customer account registered: testcust_1793727983951@example.com",
+      "adminEmail": "testcust_1793727983951@example.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:46:23.995Z"
+    },
+    {
+      "id": "log-1793727946336-u51z",
+      "action": "ADMIN_SIGNIN",
+      "details": "Administrator signed in: kalikalivino17@gmail.com",
+      "adminEmail": "kalikalivino17@gmail.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:45:46.336Z"
+    },
+    {
+      "id": "log-1793727926142-m6kj",
+      "action": "UPI_PAYMENT_VERIFIED",
+      "details": "Admin verified Direct UPI for Order ORD-2026-4592 (₹799) - Books unlocked for testcust_1793727926067@example.com",
+      "adminEmail": "kalikalivino17@gmail.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:45:26.142Z"
+    },
+    {
+      "id": "log-1793727926134-4gh2",
+      "action": "UPI_PAYMENT_SUBMITTED",
+      "details": "Direct UPI Order submitted: ORD-2026-4592 (₹799) - UTR: UTR1793727926131",
+      "adminEmail": "testcust_1793727926067@example.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:45:26.134Z"
+    },
+    {
+      "id": "log-1793727926126-qzmr",
+      "action": "ADMIN_SIGNIN",
+      "details": "Administrator signed in: kalikalivino17@gmail.com",
+      "adminEmail": "kalikalivino17@gmail.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:45:26.126Z"
+    },
+    {
+      "id": "log-1793727926121-qxhu",
+      "action": "UNAUTHORIZED_ADMIN_BLOCKED",
+      "details": "Access Denied: Blocked unauthorized account testcust_1793727926067@example.com from accessing admin endpoint /api/admin/payment-settings",
+      "adminEmail": "testcust_1793727926067@example.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:45:26.121Z"
+    },
+    {
+      "id": "log-1793727926108-gm9g",
+      "action": "USER_REGISTERED",
+      "details": "Customer account registered: testcust_1793727926067@example.com",
+      "adminEmail": "testcust_1793727926067@example.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:45:26.108Z"
+    },
+    {
+      "id": "log-1793727886503-pl0l",
+      "action": "UPI_PAYMENT_VERIFIED",
+      "details": "Admin verified Direct UPI for Order ORD-2026-8492 (₹799) - Books unlocked for testcust_1793727886424@example.com",
+      "adminEmail": "kalikalivino17@gmail.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:44:46.503Z"
+    },
+    {
+      "id": "log-1793727886495-rd85",
+      "action": "UPI_PAYMENT_SUBMITTED",
+      "details": "Direct UPI Order submitted: ORD-2026-8492 (₹799) - UTR: UTR1793727886492",
+      "adminEmail": "testcust_1793727886424@example.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:44:46.495Z"
+    },
+    {
+      "id": "log-1793727886486-3aq5",
+      "action": "ADMIN_SIGNIN",
+      "details": "Administrator signed in: kalikalivino17@gmail.com",
+      "adminEmail": "kalikalivino17@gmail.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:44:46.486Z"
+    },
+    {
+      "id": "log-1793727886480-4w3b",
+      "action": "UNAUTHORIZED_ADMIN_BLOCKED",
+      "details": "Access Denied: Blocked unauthorized account testcust_1793727886424@example.com from accessing admin endpoint /api/admin/payment-settings",
+      "adminEmail": "testcust_1793727886424@example.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:44:46.480Z"
+    },
+    {
+      "id": "log-1793727886467-60i6",
+      "action": "USER_REGISTERED",
+      "details": "Customer account registered: testcust_1793727886424@example.com",
+      "adminEmail": "testcust_1793727886424@example.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:44:46.467Z"
+    },
+    {
+      "id": "log-1793727849221-oz4u",
+      "action": "UPI_PAYMENT_SUBMITTED",
+      "details": "Direct UPI Order submitted: ORD-2026-7508 (₹799) - UTR: UTR1793727849214",
+      "adminEmail": "testcust_1793727849172@example.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:44:09.221Z"
+    },
+    {
+      "id": "log-1793727849217-wofc",
+      "action": "UPI_PAYMENT_SUBMITTED",
+      "details": "Direct UPI Order submitted: ORD-2026-9536 (₹799) - UTR: UTR1793727849214",
+      "adminEmail": "testcust_1793727849172@example.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:44:09.217Z"
+    },
+    {
+      "id": "log-1793727849209-ndbd",
+      "action": "ADMIN_SIGNIN",
+      "details": "Administrator signed in: kalikalivino17@gmail.com",
+      "adminEmail": "kalikalivino17@gmail.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:44:09.209Z"
+    },
+    {
+      "id": "log-1793727849195-gdvw",
+      "action": "USER_REGISTERED",
+      "details": "Account registered: testcust_1793727849172@example.com (customer)",
+      "adminEmail": "testcust_1793727849172@example.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:44:09.195Z"
+    },
+    {
+      "id": "log-1793727802771-l9xt",
+      "action": "FAILED_LOGIN_ATTEMPT",
+      "details": "Failed login attempt: incorrect password for kalikalivino17@gmail.com",
+      "adminEmail": "kalikalivino17@gmail.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:43:22.771Z"
+    },
+    {
+      "id": "log-1793727802756-m84g",
+      "action": "USER_REGISTERED",
+      "details": "Account registered: testcust_1793727802717@example.com (customer)",
+      "adminEmail": "testcust_1793727802717@example.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:43:22.756Z"
+    },
+    {
+      "id": "log-1793725487687-kj8n",
+      "action": "CUSTOMER_SIGNIN",
+      "details": "Customer logged in: reader@vinothbooks.com",
+      "adminEmail": "reader@vinothbooks.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:04:47.687Z"
+    },
+    {
+      "id": "log-1793725477587-xke3",
+      "action": "PAYMENT_VERIFIED",
+      "details": "Payment verified for Order ORD-2026-2978 (reader@vinothbooks.com) - ₹799",
+      "adminEmail": "reader@vinothbooks.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:04:37.587Z"
+    },
+    {
+      "id": "log-1793725477572-7pzx",
+      "action": "UPI_PAYMENT_SUBMITTED",
+      "details": "Direct UPI retried for Order ORD-2026-2978 (₹799) - UTR: 123456789012",
+      "adminEmail": "reader@vinothbooks.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:04:37.572Z"
+    },
+    {
+      "id": "log-1793725477563-6amx",
+      "action": "ORDER_PAYMENT_RETRIED",
+      "details": "Order ORD-2026-2978 payment retried (₹799)",
+      "adminEmail": "reader@vinothbooks.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:04:37.563Z"
+    },
+    {
+      "id": "log-1793725477061-qqws",
+      "action": "CUSTOMER_SIGNIN",
+      "details": "Customer logged in: reader@vinothbooks.com",
+      "adminEmail": "reader@vinothbooks.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T17:04:37.061Z"
+    },
+    {
+      "id": "log-1793724827505-dsep",
+      "action": "PROFILE_UPDATE",
+      "details": "User updated profile settings: kalikalivino17@gmail.com",
+      "adminEmail": "kalikalivino17@gmail.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T16:53:47.505Z"
+    },
+    {
+      "id": "log-1793724824229-4bit",
+      "action": "PROFILE_UPDATE",
+      "details": "User updated profile settings: kalikalivino17@gmail.com",
+      "adminEmail": "kalikalivino17@gmail.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T16:53:44.229Z"
+    },
+    {
+      "id": "log-1793724811124-drvi",
+      "action": "PROFILE_UPDATE",
+      "details": "User updated profile settings: kalikalivino17@gmail.com",
+      "adminEmail": "kalikalivino17@gmail.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T16:53:31.124Z"
+    },
+    {
+      "id": "log-1793724808272-9lfs",
+      "action": "PROFILE_UPDATE",
+      "details": "User updated profile settings: kalikalivino17@gmail.com",
+      "adminEmail": "kalikalivino17@gmail.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T16:53:28.272Z"
+    },
+    {
+      "id": "log-1793724805510-m1yy",
+      "action": "PROFILE_UPDATE",
+      "details": "User updated profile settings: kalikalivino17@gmail.com",
+      "adminEmail": "kalikalivino17@gmail.com",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-11-03T16:53:25.510Z"
+    },
+    {
+      "id": "log-seed-1",
+      "action": "SYSTEM_BOOT",
+      "adminEmail": "system@vinothbooks.com",
+      "details": "VINOTH BOOKS cryptographic core and catalog initialized.",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-04-20T10:00:00.000Z"
+    },
+    {
+      "id": "log-seed-2",
+      "action": "FIREBASE_RULES_DEPLOY",
+      "adminEmail": "kalivinoselvikk@gmail.com",
+      "details": "Security rules verified with default-deny and ABAC role enforcement.",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-04-25T14:30:00.000Z"
+    },
+    {
+      "id": "log-seed-3",
+      "action": "SECURITY_AUDIT",
+      "adminEmail": "kalikalivino17@gmail.com",
+      "details": "All digital download tokens and HMAC signature verification active.",
+      "ip": "127.0.0.1",
+      "timestamp": "2026-04-30T09:15:00.000Z"
+    }
+  ]
 }
