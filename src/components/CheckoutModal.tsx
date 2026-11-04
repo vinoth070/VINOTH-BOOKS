@@ -41,6 +41,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onSuccess }) => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [noticeMsg, setNoticeMsg] = useState<string | null>(null);
   const [completedOrder, setCompletedOrder] = useState<any>(null);
+  const [isQrZoomModalOpen, setIsQrZoomModalOpen] = useState(false);
 
   // Authoritative items and pricing resolution
   const displayItems = retryOrder
@@ -257,22 +258,28 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onSuccess }) => {
       const hasRegisteredOrder = Boolean(orderData.isRealOrder && orderData.razorpayOrderId);
 
       if (hasRealCredentials && hasRegisteredOrder && typeof (window as any).Razorpay !== 'undefined') {
+        const prefill: Record<string, string> = {};
+        const customerName = orderData.customer?.name || user.name;
+        if (customerName && customerName.trim()) {
+          prefill.name = customerName.trim();
+        }
+        const customerEmail = orderData.customer?.email || user.email;
+        if (customerEmail && customerEmail.trim()) {
+          prefill.email = customerEmail.trim();
+        }
+        if (user.phone && user.phone.trim().length >= 10) {
+          prefill.contact = user.phone.trim();
+        }
+
         const options: any = {
           key: orderData.keyId,
           order_id: orderData.razorpayOrderId,
-          amount: Math.round(orderData.amount),
-          currency: orderData.currency || 'INR',
           name: 'VINOTH BOOKS',
           description: `Digital eBooks Purchase (${displayItems.length} titles)`,
-          prefill: {
-            name: orderData.customer?.name || user.name,
-            email: orderData.customer?.email || user.email,
-            contact: user.phone || '',
-            ...(selectedRazorpayMethod !== 'all' ? { method: selectedRazorpayMethod } : {})
-          },
           theme: {
             color: '#B38A38'
           },
+          prefill: Object.keys(prefill).length > 0 ? prefill : undefined,
           handler: async (response: any) => {
             try {
               await apiClient.post('/api/payment/verify', {
@@ -280,7 +287,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onSuccess }) => {
                 razorpayPaymentId: response.razorpay_payment_id,
                 razorpayOrderId: response.razorpay_order_id || orderData.razorpayOrderId,
                 razorpaySignature: response.razorpay_signature,
-                paymentMethod: response.method || selectedRazorpayMethod || 'razorpay_checkout'
+                paymentMethod: response.method || 'razorpay_checkout'
               });
               await refreshUser();
               clearCart();
@@ -300,27 +307,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onSuccess }) => {
           }
         };
 
-        // When user specifically chooses Card payment, launch Razorpay's Card interface directly
-        if (selectedRazorpayMethod === 'card') {
-          options.config = {
-            display: {
-              blocks: {
-                card: {
-                  name: 'Pay with Credit/Debit Card',
-                  instruments: [{ method: 'card' }]
-                }
-              },
-              sequence: ['block.card']
-            }
-          };
-        }
-
         try {
           const rzp = new (window as any).Razorpay(options);
           rzp.on('payment.failed', (resp: any) => {
             setIsProcessing(false);
-            const desc = resp.error?.description || resp.error?.reason || 'Payment declined by bank.';
-            setErrorMsg(`Payment Failed: ${desc} You can retry or choose Direct UPI QR.`);
+            const desc = resp?.error?.description || resp?.error?.reason || 'Payment was declined or cancelled.';
+            setErrorMsg(`Payment Notice: ${desc} You can retry or switch to Direct UPI QR below.`);
           });
           rzp.open();
           return;
@@ -630,14 +622,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onSuccess }) => {
                       {/* Large Responsive QR Code & Merchant Information */}
                       <div className="flex flex-col sm:flex-row items-center gap-4 p-3 bg-gradient-to-b from-[var(--bg-surface)] to-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] rounded-xl">
                         {/* High-Resolution QR Code */}
-                        <div className="bg-white p-2.5 rounded-xl shadow-md border border-slate-200 shrink-0 text-center">
+                        <div
+                          onClick={() => setIsQrZoomModalOpen(true)}
+                          className="bg-white p-2.5 rounded-xl shadow-md border border-slate-200 shrink-0 text-center cursor-pointer hover:border-[var(--accent-gold)] transition-all group"
+                          title="Click to expand QR Code"
+                        >
                           <img
                             src={qrImageSrc}
                             alt="Merchant UPI QR Code"
-                            className="w-44 h-44 sm:w-48 sm:h-48 object-contain mx-auto"
+                            className="w-44 h-44 sm:w-48 sm:h-48 object-contain mx-auto transition-transform group-hover:scale-[1.02]"
                           />
-                          <p className="text-[10px] font-bold text-slate-700 mt-1.5 uppercase tracking-wider">
-                            Scan with GPay / PhonePe / Paytm / BHIM
+                          <p className="text-[10px] font-bold text-slate-700 mt-1.5 uppercase tracking-wider flex items-center justify-center gap-1">
+                            <span>Tap to Zoom / Fullscreen</span>
                           </p>
                         </div>
 
@@ -823,6 +819,48 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onSuccess }) => {
           )}
         </div>
       </div>
+
+      {/* Expanded Zoom QR Modal */}
+      {isQrZoomModalOpen && (
+        <div className="fixed inset-0 z-60 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="relative bg-white rounded-2xl max-w-sm w-full p-6 text-center text-slate-900 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150">
+            <button
+              onClick={() => setIsQrZoomModalOpen(false)}
+              className="absolute top-3 right-3 p-2 text-slate-500 hover:text-slate-900 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+              title="Close expanded QR"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="w-10 h-10 mx-auto rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center mb-2">
+              <QrCode className="w-6 h-6" />
+            </div>
+            <h4 className="font-serif font-bold text-lg text-slate-900">
+              Scan & Pay ₹{displayTotal}
+            </h4>
+            <p className="text-xs text-slate-600 mt-0.5 mb-4">
+              Use any UPI App: GPay, PhonePe, Paytm, BHIM, CRED
+            </p>
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 inline-block shadow-inner">
+              <img
+                src={qrImageSrc}
+                alt="Large UPI QR Code"
+                className="w-64 h-64 sm:w-72 sm:h-72 object-contain mx-auto"
+              />
+            </div>
+            <div className="mt-4 p-2.5 bg-slate-100 rounded-lg text-xs space-y-1">
+              <span className="block text-[11px] text-slate-500 font-semibold uppercase">Payee: {effectivePayee}</span>
+              <span className="font-mono font-bold text-slate-800 break-all">{effectiveUpiId}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsQrZoomModalOpen(false)}
+              className="mt-4 w-full py-2.5 bg-[#0B1325] text-white text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-[#1E293B] transition-colors cursor-pointer"
+            >
+              Done / Return to Checkout
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

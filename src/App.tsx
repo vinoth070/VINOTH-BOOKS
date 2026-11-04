@@ -29,6 +29,7 @@ import { FALLBACK_BOOKS, FALLBACK_CATEGORIES } from './data/fallbackData';
 
 function MainApp() {
   const { user, token, logout, isAdmin, isLoading: isAuthLoading } = useAuth();
+  const { buyNow, authRequiredAction, setAuthRequiredAction, setIsCheckoutOpen } = useCart();
   const { t } = useI18n();
 
   const [currentView, setCurrentView] = useState<string>('home');
@@ -36,13 +37,74 @@ function MainApp() {
   const [books, setBooks] = useState<Book[]>(FALLBACK_BOOKS);
   const [categories, setCategories] = useState<Category[]>(FALLBACK_CATEGORIES);
   const [loading, setLoading] = useState(false);
+  const [demoBooksPurged, setDemoBooksPurged] = useState(false);
 
   // Modals
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [readerBookId, setReaderBookId] = useState<string | null>(null);
 
-  // Fetch initial books and categories with resilient local persistence
+  // Trigger auth modal if any action requires login
+  useEffect(() => {
+    if (authRequiredAction) {
+      setIsAuthModalOpen(true);
+    }
+  }, [authRequiredAction]);
+
+  // Centralized Real-Time Cloud Firestore Sync across all devices
+  useEffect(() => {
+    let unsubBooks: () => void = () => {};
+    let unsubCats: () => void = () => {};
+    let unsubMeta: () => void = () => {};
+
+    const initCloudSync = async () => {
+      try {
+        const { db } = await import('./firebase');
+        const { collection, doc, onSnapshot } = await import('firebase/firestore');
+
+        // 1. Listen for catalog meta (e.g. demo books purged flag)
+        unsubMeta = onSnapshot(doc(db, 'settings', 'catalog_meta'), (snap) => {
+          if (snap.exists() && snap.data()?.demoBooksPurged) {
+            setDemoBooksPurged(true);
+          }
+        }, (err) => console.warn('Catalog meta listener:', err.message));
+
+        // 2. Listen to real-time books collection
+        unsubBooks = onSnapshot(collection(db, 'books'), (snap) => {
+          if (!snap.empty) {
+            const cloudBooks: Book[] = [];
+            snap.forEach(d => {
+              cloudBooks.push({ id: d.id, ...(d.data() as any) } as Book);
+            });
+            setBooks(cloudBooks);
+          }
+        }, (err) => console.warn('Firestore books listener:', err.message));
+
+        // 3. Listen to real-time categories collection
+        unsubCats = onSnapshot(collection(db, 'categories'), (snap) => {
+          if (!snap.empty) {
+            const cloudCats: Category[] = [];
+            snap.forEach(d => {
+              cloudCats.push({ id: d.id, ...(d.data() as any) } as Category);
+            });
+            setCategories(cloudCats);
+          }
+        }, (err) => console.warn('Firestore categories listener:', err.message));
+      } catch (err: any) {
+        console.warn('Real-time sync init notice:', err.message);
+      }
+    };
+
+    initCloudSync();
+
+    return () => {
+      unsubBooks();
+      unsubCats();
+      unsubMeta();
+    };
+  }, []);
+
+  // Fetch initial books and categories from API / fallback
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -51,23 +113,12 @@ function MainApp() {
         apiClient.get<{ categories: Category[] }>('/api/categories')
       ]);
 
-      let deletedIds: string[] = [];
-      let customBooks: Book[] = [];
-      try {
-        deletedIds = JSON.parse(localStorage.getItem('vb_deleted_books') || '[]');
-        customBooks = JSON.parse(localStorage.getItem('vb_custom_books') || '[]');
-      } catch {}
-
-      const isPurged = localStorage.getItem('vb_demo_purged') === 'true';
-
-      if (resBooks.status === 'fulfilled' && Array.isArray(resBooks.value?.books)) {
-        const filtered = resBooks.value.books.filter(b => !deletedIds.includes(b.id));
-        setBooks([...customBooks, ...filtered]);
-      } else if (isPurged) {
-        setBooks([...customBooks]);
+      if (resBooks.status === 'fulfilled' && Array.isArray(resBooks.value?.books) && resBooks.value.books.length > 0) {
+        setBooks(resBooks.value.books);
+      } else if (!demoBooksPurged) {
+        setBooks(FALLBACK_BOOKS);
       } else {
-        const filtered = FALLBACK_BOOKS.filter(b => !deletedIds.includes(b.id));
-        setBooks([...customBooks, ...filtered]);
+        setBooks([]);
       }
 
       if (resCats.status === 'fulfilled' && Array.isArray(resCats.value?.categories) && resCats.value.categories.length > 0) {
@@ -77,20 +128,9 @@ function MainApp() {
       }
     } catch (err) {
       console.warn('Fallback catalog notice:', err);
-      let deletedIds: string[] = [];
-      let customBooks: Book[] = [];
-      try {
-        deletedIds = JSON.parse(localStorage.getItem('vb_deleted_books') || '[]');
-        customBooks = JSON.parse(localStorage.getItem('vb_custom_books') || '[]');
-      } catch {}
-      const isPurged = localStorage.getItem('vb_demo_purged') === 'true';
-      if (isPurged) {
-        setBooks([...customBooks]);
-      } else {
-        const filtered = FALLBACK_BOOKS.filter(b => !deletedIds.includes(b.id));
-        setBooks([...customBooks, ...filtered]);
+      if (!demoBooksPurged) {
+        setBooks(FALLBACK_BOOKS);
       }
-      setCategories(FALLBACK_CATEGORIES);
     } finally {
       setLoading(false);
     }
@@ -161,7 +201,8 @@ function MainApp() {
   };
 
   const handleDownload = async (book: Book) => {
-    if (!token) {
+    if (!token && !user) {
+      setAuthRequiredAction({ type: 'download', book });
       setIsAuthModalOpen(true);
       return;
     }
@@ -435,9 +476,30 @@ https://vinoth070.github.io/VINOTH-BOOKS/
       {/* Customer & Unified Authentication Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
+        onClose={() => {
+          setIsAuthModalOpen(false);
+          setAuthRequiredAction(null);
+        }}
+        intendedAction={authRequiredAction}
         onAdminLoginSuccess={() => navigateTo('admin')}
-        onCustomerLoginSuccess={() => navigateTo('home')}
+        onCustomerLoginSuccess={() => {
+          setIsAuthModalOpen(false);
+          if (authRequiredAction) {
+            const pending = authRequiredAction;
+            setAuthRequiredAction(null);
+            setTimeout(() => {
+              if (pending.type === 'buy' && pending.book) {
+                buyNow(pending.book);
+              } else if (pending.type === 'download' && pending.book) {
+                handleDownload(pending.book);
+              } else if (pending.type === 'checkout') {
+                setIsCheckoutOpen(true);
+              }
+            }, 300);
+          } else {
+            navigateTo('home');
+          }
+        }}
       />
 
       {/* Public Customer Feedback & Inquiries Modal */}

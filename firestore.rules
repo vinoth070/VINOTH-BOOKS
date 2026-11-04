@@ -27,15 +27,20 @@ service cloud.firestore {
       return id is string && id.size() > 0 && id.size() <= 128;
     }
 
-    // Website Settings
+    // Website Settings & System Settings (payment_upi, catalog_meta, etc.)
     match /websiteSettings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /settings/{docId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
     // Books catalog
     match /books/{bookId} {
-      allow read: if resource.data.status == 'published' || isAdmin();
+      allow read: if true;
       allow write: if isAdmin();
     }
 

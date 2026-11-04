@@ -8,6 +8,7 @@ import { Book, Category } from '../types';
 import { BookCard } from '../components/BookCard';
 import { apiClient } from '../services/apiClient';
 import { resolveBookCover } from '../utils/imageUrl';
+import { useI18n } from '../context/I18nContext';
 
 interface HomeViewProps {
   books: Book[];
@@ -24,6 +25,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onNavigate,
   onOpenReader
 }) => {
+  const { t } = useI18n();
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [newsletterMessage, setNewsletterMessage] = useState('');
@@ -111,15 +113,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
             
             <div className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-[var(--accent-gold)] font-bold px-3 py-1 rounded-full bg-[var(--accent-gold-muted)] border border-[var(--border-subtle)]">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Independent Digital Publishing House</span>
+              <span>{t('hero.badge', 'Official Publishing House of Author Vinoth')}</span>
             </div>
 
             <h1 className="font-serif text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-[var(--text-primary)] leading-[1.15] text-balance">
-              Essential Digital Editions by Vinoth
+              {t('hero.title', 'Essential Digital Editions by Vinoth')}
             </h1>
 
             <p className="text-base sm:text-lg text-[var(--text-secondary)] leading-relaxed max-w-2xl mx-auto">
-              Explore thoughtfully crafted digital books by Vinoth. Delivering timeless mental models, actionable systems architecture, and transformative ideas directly to readers worldwide.
+              {t('hero.subtitle', 'Explore thoughtfully crafted digital books by Vinoth. Delivering timeless mental models, actionable systems architecture, and transformative ideas directly to readers worldwide.')}
             </p>
 
             {/* Action Buttons */}
@@ -129,7 +131,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 onClick={() => onNavigate('explore')}
                 className="w-full sm:w-auto px-6 sm:px-7 py-3.5 text-xs font-bold uppercase tracking-wider bg-[var(--accent-gold)] hover:bg-[var(--accent-gold-hover)] text-[#0B1325] rounded-lg transition-all flex items-center justify-center gap-2.5 shadow-md hover:shadow-xl cursor-pointer"
               >
-                <span>Explore Catalog ({books.length} Books)</span>
+                <span>{t('hero.browse', 'Explore Catalog')} ({books.length})</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
 
@@ -138,7 +140,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 onClick={() => onNavigate('explore', { filter: 'free' })}
                 className="w-full sm:w-auto px-6 sm:px-7 py-3.5 text-xs font-bold uppercase tracking-wider border border-[var(--border-strong)] text-[var(--text-primary)] hover:bg-[var(--bg-surface-muted)] rounded-lg transition-all cursor-pointer flex items-center justify-center gap-2"
               >
-                <span>Free Starter eBooks</span>
+                <span>{t('books.free', 'Free Starter eBooks')}</span>
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               </button>
             </div>
@@ -147,15 +149,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div className="pt-8 border-t border-[var(--border-subtle)] grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs text-[var(--text-muted)] max-w-2xl mx-auto">
               <div className="flex items-center justify-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-[var(--accent-gold)] shrink-0" />
-                <span className="font-medium text-[var(--text-secondary)]">Direct Publisher Delivery</span>
+                <span className="font-medium text-[var(--text-secondary)]">{t('checkout.directDelivery', 'Direct Publisher Delivery')}</span>
               </div>
               <div className="flex items-center justify-center gap-2">
                 <Zap className="w-4 h-4 text-[var(--accent-gold)] shrink-0" />
-                <span className="font-medium text-[var(--text-secondary)]">Instant DRM-Free Access</span>
+                <span className="font-medium text-[var(--text-secondary)]">{t('checkout.instantAccess', 'Instant DRM-Free Access')}</span>
               </div>
               <div className="flex items-center justify-center gap-2">
                 <BookOpen className="w-4 h-4 text-[var(--accent-gold)] shrink-0" />
-                <span className="font-medium text-[var(--text-secondary)]">Web Reader + Offline Files</span>
+                <span className="font-medium text-[var(--text-secondary)]">{t('checkout.readerOffline', 'Web Reader + Offline Files')}</span>
               </div>
             </div>
 
@@ -425,17 +427,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
         <div className="flex items-end justify-between mb-8 pb-3 border-b border-[var(--border-subtle)]">
           <div>
             <span className="text-xs uppercase tracking-widest text-[var(--accent-gold)] font-bold block mb-1">
-              Curated Editorial Showcase
+              {t('books.featured', 'Featured Editions')}
             </span>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
-              Featured Digital Publications
+              {t('books.featured', 'Featured Digital Publications')}
             </h2>
           </div>
           <button
             onClick={() => onNavigate('explore')}
             className="text-xs font-bold uppercase tracking-wider text-[var(--accent-gold)] hover:text-[var(--accent-gold-hover)] flex items-center gap-1 transition-colors cursor-pointer"
           >
-            <span>View Full Catalog</span>
+            <span>{t('books.exploreAll', 'View Full Catalog')}</span>
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
@@ -461,10 +463,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <Award className="w-6 h-6 text-[var(--accent-gold)] hidden sm:block" />
             <div>
               <span className="text-xs uppercase tracking-widest text-[var(--accent-gold)] font-bold block mb-1">
-                Highest Reader Engagement
+                {t('nav.bestSellers', 'Best Sellers')}
               </span>
               <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
-                Best Selling Titles
+                {t('books.bestSellers', 'Best Selling Titles')}
               </h2>
             </div>
           </div>
@@ -472,7 +474,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             onClick={() => onNavigate('explore', { filter: 'bestseller' })}
             className="text-xs font-bold uppercase tracking-wider text-[var(--accent-gold)] hover:text-[var(--accent-gold-hover)] flex items-center gap-1 transition-colors cursor-pointer"
           >
-            <span>See All Bestsellers</span>
+            <span>{t('books.exploreAll', 'See All Bestsellers')}</span>
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>

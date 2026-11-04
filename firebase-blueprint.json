@@ -178,6 +178,10 @@
     "/websiteSettings/current": {
       "schema": { "$ref": "#/entities/WebsiteSettings" },
       "description": "Site global settings"
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/WebsiteSettings" },
+      "description": "Operational settings including payment_upi and catalog_meta"
     }
   }
 }

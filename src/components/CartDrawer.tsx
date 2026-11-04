@@ -18,7 +18,8 @@ export const CartDrawer: React.FC = () => {
     removeCoupon,
     subtotal,
     discount,
-    total
+    total,
+    setAuthRequiredAction
   } = useCart();
   const { user } = useAuth();
   const { t } = useI18n();
@@ -45,6 +46,10 @@ export const CartDrawer: React.FC = () => {
 
   const handleProceedToCheckout = () => {
     setIsCartOpen(false);
+    if (!user) {
+      setAuthRequiredAction({ type: 'checkout' });
+      return;
+    }
     setIsCheckoutOpen(true);
   };
 

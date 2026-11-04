@@ -22,6 +22,8 @@ interface CartContextType {
   total: number;
   buyNow: (book: Book) => void;
   isItemInCart: (bookId: string) => boolean;
+  authRequiredAction: { type: 'buy' | 'download' | 'checkout'; book?: Book } | null;
+  setAuthRequiredAction: (action: { type: 'buy' | 'download' | 'checkout'; book?: Book } | null) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -40,6 +42,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [retryOrder, setRetryOrder] = useState<Order | null>(null);
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number; message?: string } | null>(null);
+  const [authRequiredAction, setAuthRequiredAction] = useState<{ type: 'buy' | 'download' | 'checkout'; book?: Book } | null>(null);
 
   const retryPayment = (order: Order) => {
     setRetryOrder(order);
@@ -83,6 +86,11 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const isItemInCart = (bookId: string) => items.some(i => i.book.id === bookId);
 
   const buyNow = (book: Book) => {
+    const hasToken = typeof window !== 'undefined' && Boolean(localStorage.getItem('vb_token'));
+    if (!hasToken) {
+      setAuthRequiredAction({ type: 'buy', book });
+      return;
+    }
     if (!isItemInCart(book.id)) {
       setItems(prev => [...prev, { book }]);
     }
@@ -163,7 +171,9 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         discount,
         total,
         buyNow,
-        isItemInCart
+        isItemInCart,
+        authRequiredAction,
+        setAuthRequiredAction
       }}
     >
       {children}

@@ -304,7 +304,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         console.warn('Backend API save failed or static hosting, falling back to client persistence:', apiErr);
       }
 
-      // 2. Direct Cloud Firestore persistence for reliable cloud catalog
+      // 2. Direct Cloud Firestore persistence for reliable real-time cross-device sync
       try {
         const { db } = await import('../firebase');
         const { doc, setDoc } = await import('firebase/firestore');
@@ -313,28 +313,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         console.warn('Firestore direct write notice:', fsErr);
       }
 
-      // 3. Synchronize to localStorage (vb_custom_books)
+      // Clean up legacy device-specific cache
       try {
-        const existingCustom: Book[] = JSON.parse(localStorage.getItem('vb_custom_books') || '[]');
-        let updatedCustom: Book[];
-        if (editingBookId) {
-          updatedCustom = existingCustom.map(b => b.id === editingBookId ? { ...b, ...payload } : b);
-          if (!updatedCustom.some(b => b.id === editingBookId)) {
-            updatedCustom.push(payload);
-          }
-        } else {
-          updatedCustom = [payload, ...existingCustom.filter(b => b.id !== payload.id)];
-        }
-        localStorage.setItem('vb_custom_books', JSON.stringify(updatedCustom));
-
-        // If previously marked deleted, remove from deleted list
-        const deletedIds: string[] = JSON.parse(localStorage.getItem('vb_deleted_books') || '[]');
-        if (deletedIds.includes(payload.id)) {
-          localStorage.setItem('vb_deleted_books', JSON.stringify(deletedIds.filter(id => id !== payload.id)));
-        }
-      } catch (storageErr) {
-        console.error('LocalStorage sync error:', storageErr);
-      }
+        localStorage.removeItem('vb_custom_books');
+        localStorage.removeItem('vb_deleted_books');
+      } catch {}
 
       showNotification('success', editingBookId ? 'Book updated successfully!' : 'eBook published to live store!');
       await onRefreshData();
@@ -394,27 +377,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       }
 
       // 2. Direct Cloud Firestore delete
+      // 2. Direct Cloud Firestore delete
       try {
         const { db } = await import('../firebase');
         const { doc, deleteDoc } = await import('firebase/firestore');
         await deleteDoc(doc(db, 'books', bookToDelete.id));
       } catch (fsErr) {
         console.warn('Firestore book delete notice:', fsErr);
-      }
-
-      // 3. Synchronize deleted state to localStorage
-      try {
-        const deletedIds: string[] = JSON.parse(localStorage.getItem('vb_deleted_books') || '[]');
-        if (!deletedIds.includes(bookToDelete.id)) {
-          deletedIds.push(bookToDelete.id);
-          localStorage.setItem('vb_deleted_books', JSON.stringify(deletedIds));
-        }
-
-        const customBooks: Book[] = JSON.parse(localStorage.getItem('vb_custom_books') || '[]');
-        const updatedCustom = customBooks.filter((b: Book) => b.id !== bookToDelete.id);
-        localStorage.setItem('vb_custom_books', JSON.stringify(updatedCustom));
-      } catch (storageErr) {
-        console.error('LocalStorage sync delete error:', storageErr);
       }
 
       showNotification('success', `"${bookToDelete.title}" removed permanently from catalog.`);
@@ -488,18 +457,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         console.warn('Backend purge note, applying local cleanup:', apiErr);
       }
 
-      // 2. Mark demo books as permanently purged so they never reappear
-      localStorage.setItem('vb_demo_purged', 'true');
-      const deletedIds: string[] = JSON.parse(localStorage.getItem('vb_deleted_books') || '[]');
-      const updatedDeleted = Array.from(new Set([...deletedIds, ...demoIds]));
-      localStorage.setItem('vb_deleted_books', JSON.stringify(updatedDeleted));
-
-      // 3. Clear from custom books and Firestore
-      const customBooks: Book[] = JSON.parse(localStorage.getItem('vb_custom_books') || '[]');
-      const filteredCustom = customBooks.filter((b: Book) => !demoIds.includes(b.id));
-      localStorage.setItem('vb_custom_books', JSON.stringify(filteredCustom));
-
-      // Delete demo documents from Firestore if present
+      // 2. Mark demo books as permanently purged in Cloud Firestore (cross-device sync)
       try {
         const { db } = await import('../firebase');
         const { doc, deleteDoc, setDoc } = await import('firebase/firestore');
@@ -508,6 +466,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       } catch (fsErr) {
         console.warn('Firestore purge sync notice:', fsErr);
       }
+
+      try {
+        localStorage.removeItem('vb_demo_purged');
+        localStorage.removeItem('vb_deleted_books');
+        localStorage.removeItem('vb_custom_books');
+      } catch {}
 
       showNotification('success', `Successfully removed ${demoIds.length} sample/demo books! Catalog is ready for your original works.`);
       setIsPurgeModalOpen(false);
@@ -3021,22 +2985,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                       </div>
 
                       <p className="text-[11px] text-slate-500">
-                        Supports PNG, JPG, JPEG, and WEBP (Max 5MB). Persistently stored and synced to Firestore.
+                        Supports PNG, JPG, JPEG, and WEBP (Max 5MB). Persistently stored and synced directly to Cloud Firestore.
                       </p>
-
-                      {/* Optional direct URL input */}
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
-                          Or specify external QR image URL:
-                        </label>
-                        <input
-                          type="url"
-                          value={upiSettings.qrImageUrl || ''}
-                          onChange={e => setUpiSettings(prev => ({ ...prev, qrImageUrl: e.target.value.trim() }))}
-                          placeholder="https://... or upload from device above"
-                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#D5CDC0] rounded-md font-mono"
-                        />
-                      </div>
                     </div>
                   </div>
                 </div>

@@ -10,9 +10,10 @@ interface AuthModalProps {
   onClose: () => void;
   onAdminLoginSuccess?: () => void;
   onCustomerLoginSuccess?: () => void;
+  intendedAction?: { type: 'buy' | 'download' | 'checkout'; book?: { title: string } } | null;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAdminLoginSuccess, onCustomerLoginSuccess }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAdminLoginSuccess, onCustomerLoginSuccess, intendedAction }) => {
   const { login, register, signInWithGoogle, forgotPassword, resendVerificationEmail } = useAuth();
 
   const [mode, setMode] = useState<'login' | 'register' | 'forgot' | 'verify'>('login');
@@ -181,6 +182,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAdminLo
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {intendedAction && (
+          <div className="mx-4 sm:mx-6 mt-3.5 p-3 rounded-xl bg-[var(--accent-gold-muted)] border border-[var(--border-strong)] flex items-center gap-2.5 text-xs text-[var(--text-secondary)]">
+            <Sparkles className="w-4 h-4 text-[var(--accent-gold)] shrink-0" />
+            <span>
+              {intendedAction.type === 'buy'
+                ? `Please sign in or create an account to purchase "${intendedAction.book?.title || 'this eBook'}".`
+                : intendedAction.type === 'download'
+                ? `Please sign in or create an account to download "${intendedAction.book?.title || 'this eBook'}".`
+                : 'Please sign in or create an account to complete your checkout.'}
+            </span>
+          </div>
+        )}
 
         <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
           {/* Tabs for Login vs Register */}
